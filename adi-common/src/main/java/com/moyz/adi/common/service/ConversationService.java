@@ -31,38 +31,76 @@ import java.util.stream.Collectors;
 import static com.moyz.adi.common.enums.ErrorEnum.*;
 import static com.moyz.adi.common.util.LocalCache.MODEL_ID_TO_OBJ;
 
+/**
+ * 对话管理服务。
+ */
 @Slf4j
 @Service
 public class ConversationService extends ServiceImpl<ConversationMapper, Conversation> {
 
+    /**
+     * 自身代理对象（用于触发异步方法）。
+     */
     @Lazy
     @Resource
     private ConversationService self;
 
+    /**
+     * 系统配置服务。
+     */
     @Resource
     private SysConfigService sysConfigService;
 
+    /**
+     * 对话消息服务。
+     */
     @Resource
     private ConversationMessageService conversationMessageService;
 
+    /**
+     * 预设对话服务。
+     */
     @Resource
     private ConversationPresetService conversationPresetService;
 
+    /**
+     * 预设对话关联服务。
+     */
     @Resource
     private ConversationPresetRelService conversationPresetRelService;
 
+    /**
+     * 用户 MCP 服务。
+     */
     @Resource
     private UserMcpService userMcpService;
 
+    /**
+     * 知识库服务。
+     */
     @Resource
     private KnowledgeBaseService knowledgeBaseService;
 
+    /**
+     * 文件服务。
+     */
     @Resource
     private FileService fileService;
 
+    /**
+     * 模型服务。
+     */
     @Resource
     private AiModelService aiModelService;
 
+    /**
+     * 按条件分页查询对话列表。
+     *
+     * @param convSearchReq 查询条件
+     * @param currentPage   当前页
+     * @param pageSize      页大小
+     * @return 分页结果
+     */
     public Page<ConvDto> search(ConvSearchReq convSearchReq, int currentPage, int pageSize) {
         Page<Conversation> page = this.lambdaQuery()
                 .eq(Conversation::getIsDeleted, false)
@@ -72,6 +110,11 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
         return MPPageUtil.convertToPage(page, ConvDto.class);
     }
 
+    /**
+     * 查询当前用户的对话列表。
+     *
+     * @return 对话 DTO 列表
+     */
     public List<ConvDto> listByUser() {
         User user = ThreadContext.getCurrentUser();
         List<Conversation> list = this.lambdaQuery()
@@ -125,7 +168,7 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
             }
             return b;
         }).getUuid();
-        //Wrap question content
+        // 组装问题消息内容
         List<ConvMsgDto> userMessages = MPPageUtil.convertToList(questions, ConvMsgDto.class, (source, target) -> {
             if (StringUtils.isNotBlank(source.getAttachments())) {
                 List<String> urls = fileService.getUrls(Arrays.stream(source.getAttachments().split(",")).toList());
@@ -142,7 +185,7 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
         });
         ConvMsgListResp result = new ConvMsgListResp(minUuid, userMessages);
 
-        //Wrap answer content
+        // 组装回答消息内容
         List<Long> parentIds = questions.stream().map(ConversationMessage::getId).toList();
         List<ConversationMessage> childMessages = conversationMessageService
                 .lambdaQuery()
@@ -151,7 +194,7 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
                 .list();
         Map<Long, List<ConversationMessage>> idToMessages = childMessages.stream().collect(Collectors.groupingBy(ConversationMessage::getParentMessageId));
 
-        //Fill AI answer to the request of user
+        // 将 AI 回答填充到对应的问题下
         result.getMsgList().forEach(item -> {
             List<ConvMsgDto> children = MPPageUtil.convertToList(idToMessages.get(item.getId()), ConvMsgDto.class);
             if (children.size() > 1) {
@@ -172,6 +215,12 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
         return result;
     }
 
+    /**
+     * 创建默认对话。
+     *
+     * @param userId 用户 ID
+     * @return 新增记录数
+     */
     public int createDefault(Long userId) {
         Conversation conversation = new Conversation();
         conversation.setUuid(UuidUtil.createShort());
@@ -180,6 +229,14 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
         return baseMapper.insert(conversation);
     }
 
+    /**
+     * 根据第一条消息创建对话。
+     *
+     * @param userId 用户 ID
+     * @param uuid   对话 UUID
+     * @param title  标题
+     * @return 对话实体
+     */
     public Conversation createByFirstMessage(Long userId, String uuid, String title) {
         Conversation conversation = new Conversation();
         conversation.setUuid(uuid);
@@ -190,6 +247,12 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
         return this.lambdaQuery().eq(Conversation::getUuid, uuid).oneOpt().orElse(null);
     }
 
+    /**
+     * 新增对话。
+     *
+     * @param convAddReq 新增请求
+     * @return 对话 DTO
+     */
     public ConvDto add(ConvAddReq convAddReq) {
         Conversation conversation = this.lambdaQuery()
                 .eq(Conversation::getUserId, ThreadContext.getCurrentUserId())
@@ -223,10 +286,10 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
     }
 
     /**
-     * 组装MCP信息
+     * 组装 MCP 信息。
      *
      * @param conversation 对话信息
-     * @param dto          对话DTO
+     * @param dto          对话 DTO
      */
     private void setMcpToDto(Conversation conversation, ConvDto dto) {
         if (StringUtils.isNotBlank(conversation.getMcpIds())) {
@@ -239,10 +302,10 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
     }
 
     /**
-     * 组装已关联的知识库信息
+     * 组装已关联的知识库信息。
      *
      * @param conv 对话信息
-     * @param dto  对话DTO
+     * @param dto  对话 DTO
      */
     private void setKbInfoToDto(Conversation conv, ConvDto dto) {
         //组装已关联的知识库信息
@@ -254,7 +317,7 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
                     .toList();
             knowledgeBaseService.listByIds(kbIds).forEach(kb -> {
                 ConvKnowledge convKnowledge = convertToConvKbDto(ThreadContext.getCurrentUser(), kb);
-                // Skip if not mine and not public
+                // 如果不是本人且不是公开知识库，则标记不可用
                 if (!convKnowledge.getIsMine() && !convKnowledge.getIsPublic()) {
                     convKnowledge.setKbInfo(null);
                     convKnowledge.setIsEnable(false);
@@ -268,9 +331,10 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
     }
 
     /**
-     * 根据预设会话创建当前用户会话
+     * 根据预设会话创建当前用户会话。
      *
-     * @param presetConvUuid 预设会话uuid
+     * @param presetConvUuid 预设会话 UUID
+     * @return 对话 DTO
      */
     public ConvDto addByPresetConv(String presetConvUuid) {
         ConversationPreset presetConv = this.conversationPresetService.lambdaQuery()
@@ -304,6 +368,13 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
         return convDto;
     }
 
+    /**
+     * 编辑对话。
+     *
+     * @param uuid        对话 UUID
+     * @param convEditReq 编辑请求
+     * @return 是否更新成功
+     */
     public boolean edit(String uuid, ConvEditReq convEditReq) {
         Conversation conversation = getOrThrow(uuid);
         Conversation one = new Conversation();
@@ -332,6 +403,12 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
         return baseMapper.updateById(one) > 0;
     }
 
+    /**
+     * 软删除对话。
+     *
+     * @param uuid 对话 UUID
+     * @return 是否删除成功
+     */
     @Transactional
     public boolean softDel(String uuid) {
         Conversation conversation = getOrThrow(uuid);
@@ -342,6 +419,11 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
                 .update();
     }
 
+    /**
+     * 统计当天创建的对话数量。
+     *
+     * @return 数量
+     */
     public int countTodayCreated() {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime beginTime = LocalDateTime.of(now.getYear(), now.getMonth(), now.getDayOfMonth(), 0, 0, 0);
@@ -349,10 +431,21 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
         return baseMapper.countCreatedByTimePeriod(beginTime, endTime);
     }
 
+    /**
+     * 统计全部对话数量。
+     *
+     * @return 数量
+     */
     public int countAllCreated() {
         return baseMapper.countAllCreated();
     }
 
+    /**
+     * 按 UUID 获取对话，不存在或无权限则抛异常。
+     *
+     * @param uuid 对话 UUID
+     * @return 对话实体
+     */
     private Conversation getOrThrow(String uuid) {
         Conversation conversation = this.lambdaQuery()
                 .eq(Conversation::getUuid, uuid)
@@ -368,10 +461,10 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
     }
 
     /**
-     * 过滤出有效的MCP服务id列表 | Filter the list of valid MCP service IDs
+     * 过滤出有效的 MCP 服务 ID 列表。
      *
-     * @param mcpIdsInReq 请求中传入的MCP服务id列表 | List of MCP service IDs passed in the request
-     * @return 有效的MCP服务id列表 | List of valid MCP service IDs
+     * @param mcpIdsInReq 请求中传入的 MCP 服务 ID 列表
+     * @return 有效的 MCP 服务 ID 列表
      */
     private List<Long> filterEnableMcpIds(List<Long> mcpIdsInReq) {
         List<Long> result = new ArrayList<>();
@@ -390,6 +483,13 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
         return result;
     }
 
+    /**
+     * 过滤出有效的知识库 ID 列表。
+     *
+     * @param user      当前用户
+     * @param kbIdsInReq 请求中的知识库 ID 列表
+     * @return 有效知识库 ID 列表
+     */
     public List<Long> filterEnableKbIds(User user, List<Long> kbIdsInReq) {
         if (CollectionUtils.isEmpty(kbIdsInReq)) {
             return Collections.emptyList();
@@ -399,12 +499,12 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
     }
 
     /**
-     * 过滤出有效的知识库id列表 | Find the list of valid knowledge base IDs
+     * 过滤出有效的知识库列表。
      * 如果知识库是别人的且不是公开的，则不属于有效的可以关联的知识库
      *
-     * @param user 当前用户 | Current user
-     * @param ids  知识库id列表 | List of knowledge base IDs
-     * @return 有效的知识库列表 | List of valid knowledge base
+     * @param user 当前用户
+     * @param ids  知识库 ID 列表
+     * @return 有效的知识库列表
      */
     public List<KbInfoResp> filterEnableKb(User user, List<Long> ids) {
         if (CollectionUtils.isEmpty(ids)) {
@@ -415,6 +515,13 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
                 .toList();
     }
 
+    /**
+     * 将知识库信息转换为对话关联对象。
+     *
+     * @param user   当前用户
+     * @param kbInfo 知识库信息
+     * @return 对话知识库信息
+     */
     private ConvKnowledge convertToConvKbDto(User user, KbInfoResp kbInfo) {
         ConvKnowledge result = new ConvKnowledge();
         BeanUtils.copyProperties(kbInfo, result);

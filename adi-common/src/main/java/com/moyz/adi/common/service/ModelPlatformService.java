@@ -19,13 +19,29 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * 模型平台管理服务。
+ */
 @Slf4j
 @Service
 public class ModelPlatformService extends ServiceImpl<ModelPlatformMapper, ModelPlatform> {
+    /**
+     * 查询全部未删除的平台。
+     *
+     * @return 平台列表
+     */
     public List<ModelPlatform> listAll() {
         return this.lambdaQuery().eq(ModelPlatform::getIsDeleted, false).list();
     }
 
+    /**
+     * 分页搜索平台。
+     *
+     * @param searchReq   查询条件
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 分页结果
+     */
     public Page<ModelPlatform> search(ModelPlatformSearchReq searchReq, Integer currentPage, Integer pageSize) {
         LambdaQueryWrapper<ModelPlatform> lambdaQueryWrapper = new LambdaQueryWrapper<>();
         lambdaQueryWrapper.like(StringUtils.isNotBlank(searchReq.getName()), ModelPlatform::getName, searchReq.getName());
@@ -36,6 +52,12 @@ public class ModelPlatformService extends ServiceImpl<ModelPlatformMapper, Model
         return MPPageUtil.convertToPage(aiModelPage, new Page<>(), ModelPlatform.class);
     }
 
+    /**
+     * 按名称查询平台。
+     *
+     * @param name 平台名称
+     * @return 平台实体
+     */
     public ModelPlatform getByName(String name) {
         LambdaQueryWrapper<ModelPlatform> lambdaQueryWrapper = Wrappers.lambdaQuery();
         lambdaQueryWrapper
@@ -44,6 +66,12 @@ public class ModelPlatformService extends ServiceImpl<ModelPlatformMapper, Model
         return baseMapper.selectOne(lambdaQueryWrapper);
     }
 
+    /**
+     * 按 ID 查询平台。
+     *
+     * @param id 平台 ID
+     * @return 平台实体
+     */
     public ModelPlatform getById(Long id) {
         LambdaQueryWrapper<ModelPlatform> lambdaQueryWrapper = Wrappers.lambdaQuery();
         lambdaQueryWrapper
@@ -52,6 +80,12 @@ public class ModelPlatformService extends ServiceImpl<ModelPlatformMapper, Model
         return baseMapper.selectOne(lambdaQueryWrapper);
     }
 
+    /**
+     * 新增平台。
+     *
+     * @param modelPlatform 平台信息
+     * @return 新增后的平台
+     */
     public ModelPlatform addOne(ModelPlatform modelPlatform) {
         if (!ThreadContext.getCurrentUser().getIsAdmin()) {
             throw new BaseException(ErrorEnum.A_USER_NOT_AUTH);
@@ -70,6 +104,12 @@ public class ModelPlatformService extends ServiceImpl<ModelPlatformMapper, Model
         return this.getByName(modelPlatform.getName());
     }
 
+    /**
+     * 编辑平台信息。
+     *
+     * @param modelPlatform 平台信息
+     * @return 更新后的平台
+     */
     public ModelPlatform edit(ModelPlatform modelPlatform) {
         if (!ThreadContext.getCurrentUser().getIsAdmin()) {
             throw new BaseException(ErrorEnum.A_USER_NOT_AUTH);
@@ -84,7 +124,7 @@ public class ModelPlatformService extends ServiceImpl<ModelPlatformMapper, Model
         this.updateById(exist);
         ModelPlatform newPlatform = this.getById(modelPlatform.getId());
 
-        //Update all related LLMService platform info
+        // 更新所有相关 LLMService 的平台信息
         LLMContext.getAllServices().forEach(service -> {
             if (service.getPlatform().getName().equals(newPlatform.getName())) {
                 service.setPlatform(newPlatform);
@@ -93,6 +133,12 @@ public class ModelPlatformService extends ServiceImpl<ModelPlatformMapper, Model
         return newPlatform;
     }
 
+    /**
+     * 按 ID 查询平台，不存在则抛异常。
+     *
+     * @param id 平台 ID
+     * @return 平台实体
+     */
     public ModelPlatform getByIdOrThrow(Long id) {
         ModelPlatform exist = baseMapper.selectById(id);
         if (null == exist) {
@@ -101,6 +147,11 @@ public class ModelPlatformService extends ServiceImpl<ModelPlatformMapper, Model
         return exist;
     }
 
+    /**
+     * 软删除平台。
+     *
+     * @param id 平台 ID
+     */
     public void softDelete(Long id) {
         if (!ThreadContext.getCurrentUser().getIsAdmin()) {
             throw new BaseException(ErrorEnum.A_USER_NOT_AUTH);

@@ -6,9 +6,13 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 /**
- * Copy https://github.com/microsoft/graphrag/blob/main/graphrag/prompts/index/extract_graph.py
+ * 图谱抽取提示词集合，基于 GraphRAG 示例改写。
+ * 参考：https://github.com/microsoft/graphrag/blob/main/graphrag/prompts/index/extract_graph.py
  */
 public class GraphExtractPrompt {
+    /**
+     * 英文抽取提示词模板。
+     */
     public static final String GRAPH_EXTRACTION_PROMPT = """
             -Goal-
             Given a text document that is potentially relevant to this activity and a list of entity types, identify all entities of those types from the text and all relationships among the identified entities.
@@ -134,6 +138,9 @@ public class GraphExtractPrompt {
             .replace("{completion_delimiter}", AdiConstant.GRAPH_COMPLETION_DELIMITER)
             .replace("{record_delimiter}", AdiConstant.GRAPH_RECORD_DELIMITER);
 
+    /**
+     * 中文抽取提示词模板。
+     */
     public static final String GRAPH_EXTRACTION_PROMPT_CN = """
             -目标-
             给定一个可能与此活动相关的文本文档以及实体类型列表，从文本中识别出所有这些类型的实体以及识别出的实体之间的所有关系。
@@ -259,6 +266,13 @@ public class GraphExtractPrompt {
             .replace("{entity_types}", String.join(",", AdiConstant.GRAPH_ENTITY_EXTRACTION_ENTITY_TYPES))
             .replace("{completion_delimiter}", AdiConstant.GRAPH_COMPLETION_DELIMITER)
             .replace("{record_delimiter}", AdiConstant.GRAPH_RECORD_DELIMITER);
+
+    /**
+     * 继续补充抽取内容的提示词。
+     */
     public static final String CONTINUE_PROMPT = "MANY entities and relationships were missed in the last extraction. Remember to ONLY emit entities that match any of the previously extracted types. Add them below using the same format:\n";
+    /**
+     * 检查是否仍有遗漏的提示词。
+     */
     public static final String LOOP_PROMPT = "It appears some entities and relationships may have still been missed.  Answer YES | NO if there are still entities or relationships that need to be added.\n";
 }

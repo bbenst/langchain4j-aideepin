@@ -24,18 +24,18 @@ import static com.moyz.adi.common.enums.ErrorEnum.A_DATA_NOT_FOUND;
 import static com.moyz.adi.common.util.LocalCache.MODEL_ID_TO_OBJ;
 
 /**
- * Ai search
+ * AI 搜索记录服务。
  */
 @Slf4j
 @Service
 public class AiSearchRecordService extends ServiceImpl<AiSearchRecordMapper, AiSearchRecord> {
 
     /**
-     * List search records
+     * 分页查询搜索记录。
      *
-     * @param maxId   Anchor id
-     * @param keyword user's question
-     * @return
+     * @param maxId   锚点 ID
+     * @param keyword 用户问题
+     * @return 搜索记录响应
      */
     public AiSearchResp listByMaxId(Long maxId, String keyword) {
         LambdaQueryWrapper<AiSearchRecord> wrapper = new LambdaQueryWrapper<>();
@@ -62,6 +62,12 @@ public class AiSearchRecordService extends ServiceImpl<AiSearchRecordMapper, AiS
         return result;
     }
 
+    /**
+     * 软删除搜索记录。
+     *
+     * @param uuid 记录 UUID
+     * @return 是否删除成功
+     */
     public boolean softDelete(String uuid) {
         if (Boolean.TRUE.equals(ThreadContext.getCurrentUser().getIsAdmin())) {
             return ChainWrappers.lambdaUpdateChain(baseMapper)

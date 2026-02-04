@@ -14,13 +14,24 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.List;
 
+/**
+ * Web MVC 配置类。
+ */
 @Slf4j
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
 
+    /**
+     * JSON 序列化工具。
+     */
     @Resource
     private ObjectMapper objectMapper;
 
+    /**
+     * 配置消息转换器。
+     *
+     * @param converters 转换器列表
+     */
     @Override
     public void configureMessageConverters(List<HttpMessageConverter<?>> converters) {
         log.info("WebMvcConfig==configureMessageConverters");
@@ -30,6 +41,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
         converters.add(new ByteArrayHttpMessageConverter());
     }
 
+    /**
+     * 配置跨域规则。
+     *
+     * @param registry 跨域注册器
+     */
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
@@ -37,6 +53,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .allowedHeaders("*"); // 允许的请求头
     }
 
+    /**
+     * 配置拦截器（当前不启用）。
+     *
+     * @param registry 拦截器注册器
+     */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         //使用ParamsLogAspect代替

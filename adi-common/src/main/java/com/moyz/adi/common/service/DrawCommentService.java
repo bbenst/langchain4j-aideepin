@@ -21,10 +21,16 @@ import static com.moyz.adi.common.cosntant.RedisKeyConstant.DRAW_COMMENT_LIMIT_K
 import static com.moyz.adi.common.enums.ErrorEnum.A_DATA_NOT_FOUND;
 import static com.moyz.adi.common.enums.ErrorEnum.A_OPT_TOO_FREQUENTLY;
 
+/**
+ * 绘图评论服务。
+ */
 @Slf4j
 @Service
 public class DrawCommentService extends ServiceImpl<DrawCommentMapper, DrawComment> {
 
+    /**
+     * Redis 分布式锁工具。
+     */
     @Resource
     private RedisTemplateUtil redisTemplateUtil;
 
@@ -60,10 +66,24 @@ public class DrawCommentService extends ServiceImpl<DrawCommentMapper, DrawComme
                 .build();
     }
 
+    /**
+     * 分页查询绘图评论。
+     *
+     * @param drawId      绘图 ID
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 评论分页
+     */
     public Page<DrawCommentDto> listByPage(long drawId, int currentPage, int pageSize) {
         return baseMapper.listByPage(new Page<>(currentPage, pageSize), drawId);
     }
 
+    /**
+     * 软删除评论。
+     *
+     * @param id 评论 ID
+     * @return 是否删除成功
+     */
     public boolean softDel(Long id) {
         DrawComment drawComment = PrivilegeUtil.checkAndGetById(id, this.query(), A_DATA_NOT_FOUND);
         return this.lambdaUpdate().eq(DrawComment::getId, drawComment.getId()).set(DrawComment::getIsDeleted, true).update();

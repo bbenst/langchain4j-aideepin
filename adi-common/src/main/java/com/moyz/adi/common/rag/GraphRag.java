@@ -27,26 +27,43 @@ import java.util.List;
 import static com.moyz.adi.common.cosntant.AdiConstant.RAG_MAX_SEGMENT_SIZE_IN_TOKENS;
 
 /**
- * 知识图谱RAG，基于图谱存储进行问答增强
+ * 知识图谱 RAG，基于图谱存储进行问答增强。
  */
 @Slf4j
 public class GraphRag {
 
     /**
-     * RAG名称，用于区分不同实例
+     * RAG 名称，用于区分不同实例。
      */
     @Getter
     private final String name;
 
+    /**
+     * 图谱存储适配器，负责读写图谱数据。
+     */
     private final GraphStore graphStore;
 
+    /**
+     * 图谱分段持久化服务，使用时延迟获取。
+     */
     private KnowledgeBaseGraphSegmentService knowledgeBaseGraphSegmentService;
 
+    /**
+     * 创建图谱 RAG 实例。
+     *
+     * @param name RAG 实例名称
+     * @param kbGraphStore 图谱存储实现
+     */
     public GraphRag(String name, GraphStore kbGraphStore) {
         this.name = name;
         this.graphStore = kbGraphStore;
     }
 
+    /**
+     * 获取图谱分段服务，采用懒加载。
+     *
+     * @return 图谱分段服务
+     */
     public KnowledgeBaseGraphSegmentService getKnowledgeBaseGraphSegmentService() {
         if (null == knowledgeBaseGraphSegmentService) {
             knowledgeBaseGraphSegmentService = SpringUtil.getBean(KnowledgeBaseGraphSegmentService.class);
@@ -54,6 +71,11 @@ public class GraphRag {
         return knowledgeBaseGraphSegmentService;
     }
 
+    /**
+     * 将文档切分、抽取实体关系并写入图谱。
+     *
+     * @param graphIngestParams 抽取与入库参数
+     */
     public void ingest(GraphIngestParams graphIngestParams) {
         log.info("GraphRag ingest");
         User user = graphIngestParams.getUser();
@@ -77,6 +99,7 @@ public class GraphRag {
                         String response = "";
                         if (StringUtils.isNotBlank(segment.text())) {
                             if (!graphIngestParams.isFreeToken()) {
+                                // 额度不足时直接跳过抽取，避免继续扣费。
                                 ErrorEnum errorMsg = SpringUtil.getBean(QuotaHelper.class).checkTextQuota(user);
                                 if (null != errorMsg) {
                                     log.warn("抽取知识图谱时发现额度已超过限制,user:{},errorInfo:{}", user.getName(), errorMsg.getInfo());
@@ -100,6 +123,12 @@ public class GraphRag {
         ingestor.ingest(graphIngestParams.getDocument());
     }
 
+    /**
+     * 创建图谱检索器，用于问答阶段的内容检索。
+     *
+     * @param param 检索器参数
+     * @return 图谱内容检索器
+     */
     public GraphStoreContentRetriever createRetriever(RetrieverCreateParam param) {
         return GraphStoreContentRetriever.builder()
                 .graphStore(graphStore)

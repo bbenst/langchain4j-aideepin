@@ -15,14 +15,24 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-
+/**
+ * 模型与平台信息查询接口控制器。
+ */
 @RestController
 @RequestMapping("/model")
 public class ModelController {
 
+    /**
+     * 模型平台服务，提供平台信息查询。
+     */
     @Resource
     private ModelPlatformService modelPlatformService;
 
+    /**
+     * 查询支持的大语言模型列表。
+     *
+     * @return 大语言模型列表
+     */
     @Operation(summary = "支持的大语言模型列表")
     @GetMapping(value = "/llms")
     public List<LLMModelInfo> llms() {
@@ -39,6 +49,11 @@ public class ModelController {
         }).toList();
     }
 
+    /**
+     * 查询支持的图片模型列表。
+     *
+     * @return 图片模型列表
+     */
     @Operation(summary = "支持的图片模型列表")
     @GetMapping(value = "/imageModels")
     public List<ImageModelInfo> imageModels() {
@@ -55,11 +70,17 @@ public class ModelController {
         }).toList();
     }
 
+    /**
+     * 查询模型平台列表，并清理敏感字段。
+     *
+     * @return 模型平台列表
+     */
     @Operation(summary = "模型平台列表")
     @GetMapping(value = "/platforms")
     public List<ModelPlatform> platforms() {
         List<ModelPlatform> platforms = modelPlatformService.listAll();
         platforms.forEach(item -> {
+            // 出参不返回敏感信息，避免泄露密钥
             item.setApiKey("");
             item.setSecretKey("");
         });

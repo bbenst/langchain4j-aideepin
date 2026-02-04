@@ -11,6 +11,9 @@ import java.time.Duration;
 import java.util.List;
 
 import static com.moyz.adi.common.cosntant.RedisKeyConstant.TOKEN_USAGE_KEY;
+/**
+ * 大模型令牌工具类。
+ */
 
 @Slf4j
 public class LLMTokenUtil {

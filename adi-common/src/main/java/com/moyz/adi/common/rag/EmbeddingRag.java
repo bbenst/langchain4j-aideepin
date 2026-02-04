@@ -18,19 +18,35 @@ import lombok.extern.slf4j.Slf4j;
 import static com.moyz.adi.common.cosntant.AdiConstant.*;
 import static com.moyz.adi.common.vo.InputAdaptorMsg.TOKEN_TOO_MUCH_QUESTION;
 
+/**
+ * 基于向量检索的 RAG 实现。
+ */
 @Slf4j
 public class EmbeddingRag implements IRAGService {
 
     /**
-     * RAG名称，用于区分不同的实例
+     * RAG 名称，用于区分不同的实例。
      */
     @Getter
     private final String name;
 
+    /**
+     * 向量化模型。
+     */
     private final EmbeddingModel embeddingModel;
 
+    /**
+     * 向量存储实现。
+     */
     private final EmbeddingStore<TextSegment> embeddingStore;
 
+    /**
+     * 构建向量 RAG 实例。
+     *
+     * @param name 实例名称
+     * @param embeddingModel 向量化模型
+     * @param embeddingStore 向量存储实现
+     */
     public EmbeddingRag(String name, EmbeddingModel embeddingModel, EmbeddingStore<TextSegment> embeddingStore) {
         this.name = name;
         this.embeddingModel = embeddingModel;
@@ -38,10 +54,12 @@ public class EmbeddingRag implements IRAGService {
     }
 
     /**
-     * 对文档切块、向量化并存储到数据库
+     * 对文档切块、向量化并存储到数据库。
      *
      * @param document 知识库文档
-     * @param overlap  重叠token数
+     * @param overlap 重叠 token 数
+     * @param tokenEstimator token 估算器名称
+     * @param ChatModel ChatModel 实例（兼容接口）
      */
     @Override
     public void ingest(Document document, int overlap, String tokenEstimator, ChatModel ChatModel) {
@@ -56,7 +74,7 @@ public class EmbeddingRag implements IRAGService {
     }
 
     /**
-     * 创建召回器
+     * 创建召回器。
      *
      * @param param 条件
      * @return ContentRetriever
@@ -74,12 +92,12 @@ public class EmbeddingRag implements IRAGService {
     }
 
     /**
-     * 根据模型的contentWindow计算使用该模型最多召回的文档数量
-     * <br/>以分块时的最大文本段对应的token数量{maxSegmentSizeInTokens}为计算因子
+     * 根据模型的 contentWindow 计算最多召回的文档数量。
+     * <br/>以分块时的最大文本段对应的 token 数量 {maxSegmentSizeInTokens} 为计算因子。
      *
-     * @param userQuestion   用户的问题
-     * @param maxInputTokens AI模型所能容纳的窗口大小
-     * @return
+     * @param userQuestion 用户的问题
+     * @param maxInputTokens AI 模型所能容纳的窗口大小
+     * @return 召回的文档数量上限
      */
     public static int getRetrieveMaxResults(String userQuestion, int maxInputTokens) {
         if (maxInputTokens == 0) {

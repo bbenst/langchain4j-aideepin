@@ -6,7 +6,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 分布式锁注解
+ * 分布式锁注解。
  *
  * @author moyz
  * date:2021-07-15
@@ -16,30 +16,30 @@ import java.lang.annotation.Target;
 public @interface DistributeLock {
 
     /**
-     * redis key
+     * Redis 键。
      *
-     * @return
+     * @return Redis 键
      */
     String redisKey() default "";
 
     /**
-     * clientId标识用来加锁的客户端
+     * 客户端标识，用于区分加锁方。
      *
-     * @return
+     * @return 客户端标识
      */
     String clientId() default "";
 
     /**
-     * 失效时间（秒）
+     * 失效时间（秒）。
      *
-     * @return
+     * @return 失效时间
      */
     int expireInSeconds() default 0;
 
     /**
-     * 如果获取锁失败，是否继续执行
+     * 获取锁失败时是否继续执行后续逻辑。
      *
-     * @return
+     * @return 是否继续执行
      */
     boolean continueIfAcquireFail() default true;
 

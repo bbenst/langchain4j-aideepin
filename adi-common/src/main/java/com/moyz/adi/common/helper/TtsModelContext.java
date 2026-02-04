@@ -14,13 +14,19 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-
+/**
+ * 语音合成模型上下文。
+ */
 @Slf4j
 public class TtsModelContext {
 
-    //ModelName to TTS service mapping
+    /**
+     * 模型名称到TTS服务的映射表。
+     */
     private static final Map<String, AbstractTtsModelService> NAME_TO_SERVICE = new HashMap<>();
-
+    /**
+     * 当前生效的TTS模型服务。
+     */
     private final AbstractTtsModelService current;
 
     /**
@@ -41,11 +47,19 @@ public class TtsModelContext {
             throw new BaseException(ErrorEnum.B_TTS_SETTING_NOT_FOUND);
         }
     }
-
+    /**
+     * 注册TTS模型服务。
+     *
+     * @param modelService 模型服务实现
+     */
     public static void addService(AbstractTtsModelService modelService) {
         NAME_TO_SERVICE.put(modelService.getAiModel().getName(), modelService);
     }
-
+    /**
+     * 按平台清理对应的模型服务。
+     *
+     * @param platform 平台标识
+     */
     public static void clearByPlatform(String platform) {
         List<String> needDeleted = NAME_TO_SERVICE.values()
                 .stream()

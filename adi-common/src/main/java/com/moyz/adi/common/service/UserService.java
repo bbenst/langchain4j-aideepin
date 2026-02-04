@@ -37,40 +37,53 @@ import static com.moyz.adi.common.cosntant.RedisKeyConstant.*;
 import static com.moyz.adi.common.enums.ErrorEnum.*;
 
 /**
- * <p>
- * User service implementation class
- * </p>
- *
- * @author moyz
- * @since 2023-04-11
+ * 用户服务实现类。
  */
 @Slf4j
 @Service
 public class UserService extends ServiceImpl<UserMapper, User> {
 
+    /**
+     * 用户日消耗统计服务。
+     */
     @Resource
     private UserDayCostService userDayCostService;
 
+    /**
+     * 邮件发送器。
+     */
     @Resource
     private AdiMailSender adiMailSender;
 
+    /**
+     * Redis 操作模板。
+     */
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
+    /**
+     * 对话服务。
+     */
     @Resource
     private ConversationService conversationService;
 
+    /**
+     * 应用配置。
+     */
     @Resource
     private AdiProperties adiProperties;
 
+    /**
+     * 应用名称。
+     */
     @Value("${spring.application.name}")
     private String appName;
 
     /**
-     * 通过邮箱获取用户|Get user by email
+     * 通过邮箱获取用户
      *
-     * @param email 邮箱|email
-     * @return 用户|user
+     * @param email 邮箱
+     * @return 用户
      */
     public User getByEmail(String email) {
         if (StringUtils.isBlank(email)) {
@@ -80,9 +93,9 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 通过邮箱找回密码|Forgot password by email
+     * 通过邮箱找回密码
      *
-     * @param email 邮箱|email
+     * @param email 邮箱
      */
     public void forgotPassword(String email) {
         User user = getByEmail(email);
@@ -93,12 +106,12 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 注册|Register
+     * 注册
      *
-     * @param email     邮箱|email
-     * @param password  密码|password
-     * @param captchaId 验证码ID|captcha ID
-     * @param captcha   验证码|captcha
+     * @param email     邮箱
+     * @param password  密码
+     * @param captchaId 验证码ID
+     * @param captcha   验证码
      */
     public void register(String email, String password, String captchaId, String captcha) {
         //验证码
@@ -132,14 +145,14 @@ public class UserService extends ServiceImpl<UserMapper, User> {
         newOne.setUserStatus(UserStatusEnum.WAIT_CONFIRM);
         baseMapper.insert(newOne);
 
-        //Create default conversation
+        // 创建默认对话
         conversationService.createDefault(newOne.getId());
     }
 
     /**
-     * 重置密码|Reset password
+     * 重置密码
      *
-     * @param code 重置密码code|reset password code
+     * @param code 重置密码code
      */
     public void resetPassword(String code) {
         String key = MessageFormat.format(FIND_MY_PASSWORD, code);
@@ -155,10 +168,10 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 修改密码|Modify password
+     * 修改密码
      *
-     * @param oldPassword 旧密码|old password
-     * @param newPassword 新密码|new password
+     * @param oldPassword 旧密码
+     * @param newPassword 新密码
      */
     public void modifyPassword(String oldPassword, String newPassword) {
         User user = ThreadContext.getExistCurrentUser();
@@ -175,9 +188,9 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 激活|Activate
+     * 激活
      *
-     * @param activeCode 激活码|activation code
+     * @param activeCode 激活码
      */
     public void active(String activeCode) {
         String activeCodeKey = MessageFormat.format(AUTH_ACTIVE_CODE, activeCode);
@@ -203,9 +216,9 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 通过UUID激活|Activate by UUID
+     * 通过UUID激活
      *
-     * @param uuid 用户UUID|user UUID
+     * @param uuid 用户UUID
      */
     public void activeByUuid(String uuid) {
         User user = this.getByUuidOrThrow(uuid);
@@ -217,9 +230,9 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 冻结用户|Freeze user
+     * 冻结用户
      *
-     * @param uuid 用户UUID|user UUID
+     * @param uuid 用户UUID
      */
     public void freeze(String uuid) {
         User user = this.getByUuidOrThrow(uuid);
@@ -230,9 +243,9 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 编辑用户|Edit user
+     * 编辑用户
      *
-     * @param userEditReq 用户编辑请求|user edit request
+     * @param userEditReq 用户编辑请求
      */
     public void editUser(UserEditReq userEditReq) {
         User user = this.getByUuidOrThrow(userEditReq.getUuid());
@@ -249,13 +262,13 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 登录|Login
+     * 登录。
      *
-     * @param loginReq 登录请求|login request
-     * @return 登录响应|login response
+     * @param loginReq 登录请求
+     * @return 登录响应
      */
     public LoginResp login(LoginReq loginReq) {
-        //captcha check
+        // 验证码校验
         String failCountKey = MessageFormat.format(RedisKeyConstant.LOGIN_FAIL_COUNT, loginReq.getEmail());
         int passwordFailCount = 0;
         String failCountVal = stringRedisTemplate.opsForValue().get(failCountKey);
@@ -275,7 +288,7 @@ public class UserService extends ServiceImpl<UserMapper, User> {
                 throw new BaseException(A_LOGIN_CAPTCHA_ERROR);
             }
         }
-        //captcha check end
+        // 验证码校验结束
 
         User user = this.lambdaQuery().eq(User::getIsDeleted, false).eq(User::getEmail, loginReq.getEmail()).oneOpt().orElseThrow(() -> new BaseException(ErrorEnum.A_USER_NOT_EXIST));
         if (user.getUserStatus() == UserStatusEnum.WAIT_CONFIRM) {
@@ -290,7 +303,7 @@ public class UserService extends ServiceImpl<UserMapper, User> {
             throw new BaseException(ErrorEnum.A_LOGIN_ERROR);
         }
 
-        //login success
+        // 登录成功
         stringRedisTemplate.delete(failCountKey);
         String token = setLoginToken(user);
         LoginResp loginResp = new LoginResp();
@@ -300,9 +313,9 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 设置并获取登录验证码ID|Set and get login captcha ID
+     * 设置并获取登录验证码 ID。
      *
-     * @return 登录验证码ID|login captcha ID
+     * @return 登录验证码 ID
      */
     public String setAndGetLoginCaptchaId() {
         String captchaId = UuidUtil.createShort();
@@ -312,10 +325,10 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 缓存登录验证码|Cache login captcha
+     * 缓存登录验证码。
      *
-     * @param captchaId 验证码ID|captcha ID
-     * @param captcha   验证码|captcha
+     * @param captchaId 验证码 ID
+     * @param captcha   验证码
      */
     public void cacheLoginCaptcha(String captchaId, String captcha) {
         String captchaIdKey = MessageFormat.format(AUTH_LOGIN_CAPTCHA_ID, captchaId);
@@ -323,10 +336,10 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 缓存注册验证码|Cache register captcha
+     * 缓存注册验证码
      *
-     * @param captchaId 验证码ID|captcha ID
-     * @param captcha   验证码|captcha
+     * @param captchaId 验证码ID
+     * @param captcha   验证码
      */
     public void cacheRegisterCaptcha(String captchaId, String captcha) {
         String captchaIdKey = MessageFormat.format(AUTH_REGISTER_CAPTCHA_ID, captchaId);
@@ -334,18 +347,18 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 获取配置|Get config
+     * 获取配置
      *
-     * @return 配置响应|config response
+     * @return 配置响应
      */
     public ConfigResp getConfig() {
         ConfigResp result = new ConfigResp();
         User user = ThreadContext.getCurrentUser();
 
         result.setContextMsgPairNum(user.getUnderstandContextMsgPairNum());
-        //User quota
+        // 用户配额
         result.setUserQuota(UserQuota.builder().requestTimesByDay(user.getQuotaByRequestDaily()).requestTimesByMonth(user.getQuotaByRequestMonthly()).drawByDay(user.getQuotaByImageDaily()).drawByMonth(user.getQuotaByImageMonthly()).tokenByDay(user.getQuotaByTokenDaily()).tokenByMonth(user.getQuotaByTokenMonthly()).build());
-        //User cost
+        // 用户消耗
         CostStatResp quotaCostResp = new CostStatResp();
         setPaidCostStat(user, quotaCostResp);
         setFreeCostStat(user, quotaCostResp);
@@ -354,10 +367,10 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 设置付费费用统计|Set paid cost statistics
+     * 设置付费费用统计
      *
-     * @param user          用户|user
-     * @param quotaCostResp 配额费用响应|quota cost response
+     * @param user          用户
+     * @param quotaCostResp 配额费用响应
      */
     private void setPaidCostStat(User user, CostStatResp quotaCostResp) {
         CostStat cost = userDayCostService.costStatByUser(user.getId(), false);
@@ -367,10 +380,10 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 设置免费费用统计|Set free cost statistics
+     * 设置免费费用统计
      *
-     * @param user          用户|user
-     * @param quotaCostResp 配额费用响应|quota cost response
+     * @param user          用户
+     * @param quotaCostResp 配额费用响应
      */
     private void setFreeCostStat(@NotNull User user, CostStatResp quotaCostResp) {
         CostStat cost = userDayCostService.costStatByUser(user.getId(), true);
@@ -380,9 +393,9 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 更新配置|Update config
+     * 更新配置
      *
-     * @param userUpdateReq 用户更新请求|user update request
+     * @param userUpdateReq 用户更新请求
      */
     public void updateConfig(UserUpdateReq userUpdateReq) {
         User user = new User();
@@ -392,7 +405,7 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 注销|Logout
+     * 注销
      */
     public void logout() {
         String token = ThreadContext.getToken();
@@ -405,10 +418,10 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 设置用户的登录令牌|Set the login token for the user
+     * 设置用户的登录令牌
      *
-     * @param user 要设置登录令牌的用户|the user for whom the login token is being set
-     * @return 生成的登录令牌|the generated login token
+     * @param user 要设置登录令牌的用户
+     * @return 生成的登录令牌
      */
     private String setLoginToken(User user) {
         if (user.getQuotaByTokenDaily() == 0) {
@@ -432,15 +445,14 @@ public class UserService extends ServiceImpl<UserMapper, User> {
         String token = UuidUtil.createShort();
         String tokenKey = MessageFormat.format(USER_TOKEN, token);
         String jsonUser = JsonUtil.toJson(user);
-//        log.info("jsonUser:{}", jsonUser);
         stringRedisTemplate.opsForValue().set(tokenKey, jsonUser, AdiConstant.USER_TOKEN_EXPIRE, TimeUnit.HOURS);
         return token;
     }
 
     /**
-     * 发送激活链接|Send activation email
+     * 发送激活链接
      *
-     * @param email 用户邮箱|user email
+     * @param email 用户邮箱
      */
     public void sendActiveEmail(String email) {
         String activeCode = UuidUtil.createShort();
@@ -450,10 +462,10 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 通过用户ID获取用户|Get user by user ID
+     * 通过用户ID获取用户
      *
-     * @param id 用户ID|user ID
-     * @return 用户|user
+     * @param id 用户ID
+     * @return 用户
      */
     @Cacheable(cacheNames = USER_INFO, condition = "#id>0", key = "#p0")
     public User getByUserId(Long id) {
@@ -461,20 +473,20 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 通过UUID获取用户|Get user by UUID
+     * 通过UUID获取用户
      *
-     * @param uuid 用户UUID|user UUID
-     * @return 用户|user
+     * @param uuid 用户UUID
+     * @return 用户
      */
     public User getByUuid(String uuid) {
         return ChainWrappers.lambdaQueryChain(baseMapper).eq(User::getUuid, uuid).one();
     }
 
     /**
-     * 通过UUID获取用户，如果不存在则抛出异常|Get user by UUID or throw exception if not exist
+     * 通过UUID获取用户，如果不存在则抛出异常
      *
-     * @param uuid 用户UUID|user UUID
-     * @return 用户|user
+     * @param uuid 用户UUID
+     * @return 用户
      */
     public User getByUuidOrThrow(String uuid) {
         User user = this.getByUuid(uuid);
@@ -485,12 +497,12 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 搜索用户|Search users
+     * 搜索用户
      *
-     * @param req         用户搜索请求|user search request
-     * @param currentPage 当前页码|current page number
-     * @param pageSize    每页大小|page size
-     * @return 用户信息分页|page of user information
+     * @param req         用户搜索请求
+     * @param currentPage 当前页码
+     * @param pageSize    每页大小
+     * @return 用户信息分页
      */
     public Page<UserInfoDto> search(UserSearchReq req, Integer currentPage, Integer pageSize) {
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
@@ -523,10 +535,10 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     /**
-     * 添加用户|Add user
+     * 添加用户
      *
-     * @param addUserReq 添加用户请求|add user request
-     * @return 用户信息|user information
+     * @param addUserReq 添加用户请求
+     * @return 用户信息
      */
     public UserInfoDto addUser(UserAddReq addUserReq) {
         User user = this.lambdaQuery().eq(User::getIsDeleted, false).eq(User::getEmail, addUserReq.getEmail()).one();

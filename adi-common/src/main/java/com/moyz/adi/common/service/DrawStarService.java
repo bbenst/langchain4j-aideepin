@@ -13,10 +13,20 @@ import java.util.List;
 
 import static com.moyz.adi.common.cosntant.RedisKeyConstant.USER_INFO;
 
+/**
+ * 绘图收藏服务。
+ */
 @Slf4j
 @Service
 public class DrawStarService extends ServiceImpl<DrawStarMapper, DrawStar> {
 
+    /**
+     * 查询当前用户收藏记录。
+     *
+     * @param maxId    最大 ID
+     * @param pageSize 页大小
+     * @return 收藏列表
+     */
     public List<DrawStar> listByCurrentUser(Long maxId, int pageSize) {
         return this.lambdaQuery()
                 .eq(DrawStar::getUserId, ThreadContext.getCurrentUserId())
@@ -27,6 +37,13 @@ public class DrawStarService extends ServiceImpl<DrawStarMapper, DrawStar> {
                 .list();
     }
 
+    /**
+     * 切换收藏状态。
+     *
+     * @param drawId 绘图 ID
+     * @param userId 用户 ID
+     * @return 是否操作成功
+     */
     @CacheEvict(cacheNames = USER_INFO, condition = "#drawId>0 && #userId>0", key = "'star:'+#drawId+':'+#userId")
     public boolean toggle(Long drawId, Long userId) {
         DrawStar drawStar = this.lambdaQuery()
@@ -47,6 +64,13 @@ public class DrawStarService extends ServiceImpl<DrawStarMapper, DrawStar> {
         }
     }
 
+    /**
+     * 判断是否已收藏。
+     *
+     * @param drawId 绘图 ID
+     * @param userId 用户 ID
+     * @return 是否已收藏
+     */
     @Cacheable(cacheNames = USER_INFO, condition = "#drawId>0 && #userId>0", key = "'star:'+#drawId+':'+#userId")
     public boolean isStarred(Long drawId, Long userId) {
         DrawStar drawStar = this.lambdaQuery()

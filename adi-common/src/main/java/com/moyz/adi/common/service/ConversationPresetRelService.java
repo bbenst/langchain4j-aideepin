@@ -10,10 +10,20 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * 预设对话关联服务。
+ */
 @Slf4j
 @Service
 public class ConversationPresetRelService extends ServiceImpl<ConversationPresetRelMapper, ConversationPresetRel> {
 
+    /**
+     * 查询用户的预设对话关联列表。
+     *
+     * @param userId 用户 ID
+     * @param limit  最大数量
+     * @return 关联列表
+     */
     public List<ConvPresetRelDto> listByUser(Long userId, Integer limit) {
         List<ConversationPresetRel> list = this.lambdaQuery()
                 .eq(ConversationPresetRel::getUserId, userId)
@@ -23,6 +33,13 @@ public class ConversationPresetRelService extends ServiceImpl<ConversationPreset
         return MPPageUtil.convertToList(list, ConvPresetRelDto.class);
     }
 
+    /**
+     * 软删除用户与对话的预设关联。
+     *
+     * @param userId 用户 ID
+     * @param convId 对话 ID
+     * @return 是否删除成功
+     */
     public boolean softDelBy(Long userId, Long convId) {
         return this.lambdaUpdate()
                 .eq(ConversationPresetRel::getUserId, userId)

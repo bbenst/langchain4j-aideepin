@@ -14,17 +14,29 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
-
 /**
- * 根据模型设置的maxInputTokens自动调整携带的召回文档及历史记录数量
+ * 根据模型的最大输入 token 数，自动调整召回文档与历史记录长度。
  */
 @Slf4j
 public class InputAdaptor {
-
+    /**
+     * 校验用户问题是否超过最大 token 数。
+     *
+     * @param userQuestion  用户问题
+     * @param maxInputTokens 最大输入 token 数
+     * @return 校验结果
+     */
     public static InputAdaptorMsg isQuestionValid(String userQuestion, int maxInputTokens) {
         return isQuestionValid(userQuestion, maxInputTokens, TokenEstimatorFactory.create(TokenEstimatorThreadLocal.getTokenEstimator()));
     }
-
+    /**
+     * 使用指定 tokenizer 校验用户问题长度。
+     *
+     * @param userQuestion  用户问题
+     * @param maxInputTokens 最大输入 token 数
+     * @param tokenizer     token 估算器
+     * @return 校验结果
+     */
     public static InputAdaptorMsg isQuestionValid(String userQuestion, int maxInputTokens, TokenCountEstimator tokenizer) {
         InputAdaptorMsg result = new InputAdaptorMsg();
         result.setTokenTooMuch(InputAdaptorMsg.TOKEN_TOO_MUCH_NOT);
@@ -39,13 +51,14 @@ public class InputAdaptor {
     }
 
     /**
-     * 调整携带的历史记录
-     * 请求token可能超长场景之一(请求压缩)：用户原始问题+历史记录
-     * @deprecated see dev.langchain4j.memory.chatTokenWindowChatMemory
-     * @param augmentationRequest
-     * @param maxInputTokens
-     * @param tokenCostConsumer
-     * @return
+     * 调整携带的历史记录。
+     * 请求 token 可能超长场景之一（请求压缩）：用户原始问题 + 历史记录。
+     *
+     * @param augmentationRequest 增强请求
+     * @param maxInputTokens      最大输入 token 数
+     * @param tokenCostConsumer   token 消耗回调
+     * @return 调整后的元数据
+     * @deprecated 请使用 dev.langchain4j.memory.chatTokenWindowChatMemory
      */
     @Deprecated
     public static Metadata adjustMemory(AugmentationRequest augmentationRequest, int maxInputTokens, Consumer<InputAdaptorMsg> tokenCostConsumer) {
@@ -87,12 +100,12 @@ public class InputAdaptor {
     }
 
     /**
-     * 调整召回文档
-     * 请求token超长场景之二（召回文档成功后，准备结合历史记录前）：原始用户问题+召回文档
+     * 调整召回文档。
+     * 请求 token 超长场景之二（召回文档成功后，准备结合历史记录前）：原始用户问题 + 召回文档。
      *
-     * @param questionLength 原始用户问题长度
-     * @param contents       召回文档的内容
-     * @param maxInputTokens
+     * @param questionLength 原始用户问题 token 数
+     * @param contents       召回文档内容
+     * @param maxInputTokens 最大输入 token 数
      * @return 截取后的文档内容
      */
     public static List<Content> adjustRetrieveDocs(int questionLength, List<Content> contents, int maxInputTokens) {
@@ -119,12 +132,12 @@ public class InputAdaptor {
     }
 
     /**
-     * 调整准备向LLM请求的消息数量以便适应LLM的maxInputTokens
-     * 请求token超长场景之三（召回成功后，结合用户问题、历史记录提交给LLM前）：原始用户问题+召回文档
+     * 调整准备向 LLM 请求的消息数量以适配最大输入 token 数。
+     * 请求 token 超长场景之三（召回成功后，结合用户问题、历史记录提交给 LLM 前）：原始用户问题 + 召回文档。
      *
-     * @param messages
-     * @param maxInputTokens
-     * @return
+     * @param messages       消息列表
+     * @param maxInputTokens 最大输入 token 数
+     * @return 调整后的消息列表
      */
     @Deprecated
     public static List<ChatMessage> adjustMessages(List<ChatMessage> messages, int maxInputTokens) {

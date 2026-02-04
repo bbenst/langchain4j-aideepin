@@ -10,14 +10,25 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
+/**
+ * Neo4j 图数据库配置。
+ */
 @Slf4j
 @Configuration
 @ConditionalOnProperty(value = "adi.graph-database", havingValue = "neo4j")
 public class Neo4jGraphStoreConfig {
 
+    /**
+     * 应用配置属性。
+     */
     @Resource
     private AdiProperties adiProperties;
 
+    /**
+     * 构建知识库图存储。
+     *
+     * @return 图存储实例
+     */
     @Bean(name = "kbGraphStore")
     @Primary
     public GraphStore initGraphStore() {

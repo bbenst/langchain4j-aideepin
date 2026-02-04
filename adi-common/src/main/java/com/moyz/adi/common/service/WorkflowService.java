@@ -39,29 +39,58 @@ import java.util.stream.Collectors;
 
 import static com.moyz.adi.common.enums.ErrorEnum.A_OPT_TOO_FREQUENTLY;
 
+/**
+ * 工作流管理服务。
+ */
 @Slf4j
 @Service
 public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
 
+    /**
+     * 自身代理对象（用于事务方法）。
+     */
     @Lazy
     @Resource
     private WorkflowService self;
 
+    /**
+     * 工作流节点服务。
+     */
     @Resource
     private WorkflowNodeService workflowNodeService;
 
+    /**
+     * 工作流连线服务。
+     */
     @Resource
     private WorkflowEdgeService workflowEdgeService;
 
+    /**
+     * 工作流组件服务。
+     */
     @Resource
     private WorkflowComponentService workflowComponentService;
 
+    /**
+     * 用户服务。
+     */
     @Resource
     private UserService userService;
 
+    /**
+     * Redis 分布式锁工具。
+     */
     @Resource
     private RedisTemplateUtil redisTemplateUtil;
 
+    /**
+     * 新增工作流。
+     *
+     * @param title    标题
+     * @param remark   备注
+     * @param isPublic 是否公开
+     * @return 工作流响应
+     */
     @Transactional
     public WorkflowResp add(String title, String remark, Boolean isPublic) {
         String uuid = UuidUtil.createShort();
@@ -78,6 +107,12 @@ public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
         return changeWorkflowToDTO(one);
     }
 
+    /**
+     * 复制工作流。
+     *
+     * @param wfUuid 工作流 UUID
+     * @return 工作流响应
+     */
     @Transactional
     public WorkflowResp copy(String wfUuid) {
         String redisKey = MessageFormat.format(RedisKeyConstant.WORKFLOW_COPY_DOING, ThreadContext.getCurrentUserId());
@@ -97,7 +132,7 @@ public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
         List<WorkflowNode> newNodes = workflowNodeService.copyByWorkflowId(sourceWorkflow.getId(), newWorkflow.getId());
         List<WorkflowEdge> newEdges = workflowEdgeService.copyByWorkflowId(sourceWorkflow.getId(), newWorkflow.getId());
 
-        //节点及边所包含的uuid替换成新的uuid
+        // 节点及连线的 UUID 替换为新值
         List<TmpNode> tmpNodes = newNodes.stream().map(node -> {
             TmpNode tmpNode = new TmpNode();
             tmpNode.setId(node.getId());
@@ -153,6 +188,12 @@ public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
         return changeWorkflowToDTO(newWorkflow);
     }
 
+    /**
+     * 设置工作流公开状态。
+     *
+     * @param wfUuid   工作流 UUID
+     * @param isPublic 是否公开
+     */
     public void setPublic(String wfUuid, Boolean isPublic) {
         Workflow workflow = PrivilegeUtil.checkAndGetByUuid(wfUuid, this.query(), ErrorEnum.A_WF_NOT_FOUND);
         ChainWrappers.lambdaUpdateChain(baseMapper)
@@ -161,6 +202,15 @@ public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
                 .update();
     }
 
+    /**
+     * 更新工作流基础信息。
+     *
+     * @param wfUuid   工作流 UUID
+     * @param title    标题
+     * @param remark   备注
+     * @param isPublic 是否公开
+     * @return 工作流响应
+     */
     public WorkflowResp updateBaseInfo(String wfUuid, String title, String remark, Boolean isPublic) {
         if (StringUtils.isAnyBlank(wfUuid, title)) {
             throw new BaseException(ErrorEnum.A_PARAMS_ERROR);
@@ -176,6 +226,12 @@ public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
         return changeWorkflowToDTO(workflow);
     }
 
+    /**
+     * 更新工作流结构（节点与连线）。
+     *
+     * @param req 更新请求
+     * @return 工作流响应
+     */
     @Transactional
     public WorkflowResp update(WorkflowUpdateReq req) {
         Workflow workflow = PrivilegeUtil.checkAndGetByUuid(req.getUuid(), this.query(), ErrorEnum.A_WF_NOT_FOUND);
@@ -189,6 +245,12 @@ public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
         return changeWorkflowToDTO(workflow2);
     }
 
+    /**
+     * 按 UUID 获取工作流。
+     *
+     * @param uuid 工作流 UUID
+     * @return 工作流实体
+     */
     public Workflow getByUuid(String uuid) {
         return ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(Workflow::getUuid, uuid)
@@ -197,6 +259,12 @@ public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
                 .one();
     }
 
+    /**
+     * 按 UUID 获取工作流 DTO。
+     *
+     * @param uuid 工作流 UUID
+     * @return 工作流响应
+     */
     public WorkflowResp getDtoByUuid(String uuid) {
         Workflow wf = ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(Workflow::getUuid, uuid)
@@ -206,6 +274,12 @@ public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
         return changeWorkflowToDTO(wf);
     }
 
+    /**
+     * 获取工作流，不存在则抛异常。
+     *
+     * @param uuid 工作流 UUID
+     * @return 工作流实体
+     */
     public Workflow getOrThrow(String uuid) {
         Workflow workflow = ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(Workflow::getUuid, uuid)
@@ -218,6 +292,16 @@ public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
         return workflow;
     }
 
+    /**
+     * 分页搜索工作流。
+     *
+     * @param keyword     关键词
+     * @param isPublic    是否公开
+     * @param isEnable    是否启用
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 分页结果
+     */
     public Page<WorkflowResp> search(String keyword, Boolean isPublic, Boolean isEnable, Integer currentPage, Integer pageSize) {
         User user = ThreadContext.getCurrentUser();
         Page<Workflow> page = ChainWrappers.lambdaQueryChain(baseMapper)
@@ -239,6 +323,14 @@ public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
         return result;
     }
 
+    /**
+     * 分页搜索公开工作流。
+     *
+     * @param keyword     关键词
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 分页结果
+     */
     public Page<WorkflowResp> searchPublic(String keyword, Integer currentPage, Integer pageSize) {
         Page<Workflow> page = ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(Workflow::getIsDeleted, false)
@@ -258,10 +350,21 @@ public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
         return result;
     }
 
+    /**
+     * 软删除工作流。
+     *
+     * @param uuid 工作流 UUID
+     */
     public void softDelete(String uuid) {
         PrivilegeUtil.checkAndDelete(uuid, this.query(), ChainWrappers.updateChain(baseMapper), ErrorEnum.A_WF_NOT_FOUND);
     }
 
+    /**
+     * 启用或禁用工作流。
+     *
+     * @param uuid   工作流 UUID
+     * @param enable 是否启用
+     */
     public void enable(String uuid, Boolean enable) {
         if (null == enable) {
             throw new BaseException(ErrorEnum.A_PARAMS_ERROR);
@@ -274,6 +377,12 @@ public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
                 .update();
     }
 
+    /**
+     * 将工作流实体转换为响应 DTO。
+     *
+     * @param workflow 工作流实体
+     * @return 工作流响应
+     */
     private WorkflowResp changeWorkflowToDTO(Workflow workflow) {
         WorkflowResp workflowResp = new WorkflowResp();
         BeanUtils.copyProperties(workflow, workflowResp);
@@ -287,6 +396,11 @@ public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
         return workflowResp;
     }
 
+    /**
+     * 填充节点与连线信息。
+     *
+     * @param workflowResp 工作流响应
+     */
     private void fillNodesAndEdges(WorkflowResp workflowResp) {
         List<WfNodeDto> nodes = workflowNodeService.listDtoByWfId(workflowResp.getId());
         workflowResp.setNodes(nodes);
@@ -294,6 +408,12 @@ public class WorkflowService extends ServiceImpl<WorkflowMapper, Workflow> {
         workflowResp.setEdges(edges);
     }
 
+    /**
+     * 填充用户信息。
+     *
+     * @param userIds 用户 ID 列表
+     * @param resps   工作流响应列表
+     */
     private void fillUserInfos(List<Long> userIds, List<WorkflowResp> resps) {
         if (CollectionUtils.isEmpty(userIds)) {
             return;

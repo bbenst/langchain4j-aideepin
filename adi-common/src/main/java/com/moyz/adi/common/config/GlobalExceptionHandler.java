@@ -12,13 +12,17 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 全局异常处理器。
+ */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
     /**
-     * 参数校验异常
+     * 处理参数校验异常。
      *
-     * @return BaseResponse
+     * @param exception 参数校验异常
+     * @return 统一响应
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     private BaseResponse handleMethodArgumentNotValidException(
@@ -28,6 +32,12 @@ public class GlobalExceptionHandler {
         return new BaseResponse(ErrorEnum.A_PARAMS_ERROR.getCode(), ErrorEnum.A_PARAMS_ERROR.getInfo(), error);
     }
 
+    /**
+     * 处理业务异常。
+     *
+     * @param exception 业务异常
+     * @return 统一响应
+     */
     @ExceptionHandler(BaseException.class)
     private BaseResponse handleBaseException(final BaseException exception) {
         log.error("拦截业务异常:{}", exception);
@@ -35,9 +45,10 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 兜底
+     * 处理未捕获异常。
      *
-     * @return BaseResponse
+     * @param exception 未捕获异常
+     * @return 统一响应
      */
     @ExceptionHandler(Exception.class)
     private BaseResponse handleException(final Exception exception) {
@@ -45,6 +56,12 @@ public class GlobalExceptionHandler {
         return new BaseResponse(ErrorEnum.B_GLOBAL_ERROR.getCode(), ErrorEnum.B_GLOBAL_ERROR.getInfo(), exception.getMessage());
     }
 
+    /**
+     * 将校验错误封装为字段与错误信息映射。
+     *
+     * @param result 校验结果
+     * @return 错误映射
+     */
     private Map<Object, Object> wrapperError(BindingResult result) {
         Map<Object, Object> errorMap = new HashMap<>(5);
         result.getFieldErrors().forEach(x -> errorMap.put(x.getField(), x.getDefaultMessage()));

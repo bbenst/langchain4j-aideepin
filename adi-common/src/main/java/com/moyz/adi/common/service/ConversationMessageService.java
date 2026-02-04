@@ -59,45 +59,87 @@ import static com.moyz.adi.common.enums.ErrorEnum.A_CONVERSATION_NOT_FOUND;
 import static com.moyz.adi.common.enums.ErrorEnum.B_MESSAGE_NOT_FOUND;
 import static com.moyz.adi.common.util.AdiStringUtil.stringToList;
 
+/**
+ * 对话消息处理服务。
+ */
 @Slf4j
 @Service
 public class ConversationMessageService extends ServiceImpl<ConversationMessageMapper, ConversationMessage> {
 
+    /**
+     * 自身代理对象（用于触发异步方法）。
+     */
     @Lazy
     @Resource
     private ConversationMessageService self;
 
+    /**
+     * 配额校验辅助。
+     */
     @Resource
     private QuotaHelper quotaHelper;
 
+    /**
+     * 用户日消耗统计服务。
+     */
     @Resource
     private UserDayCostService userDayCostService;
 
+    /**
+     * 对话服务。
+     */
     @Lazy
     @Resource
     private ConversationService conversationService;
 
+    /**
+     * 消息引用的向量服务。
+     */
     @Resource
     private ConversationMessageRefEmbeddingService conversationMessageRefEmbeddingService;
 
+    /**
+     * 消息引用的图谱服务。
+     */
     @Resource
     private ConversationMessageRefGraphService conversationMessageRefGraphService;
 
+    /**
+     * 用户 MCP 服务。
+     */
     @Resource
     private UserMcpService userMcpService;
 
+    /**
+     * SSE 发送辅助。
+     */
     @Resource
     private SSEEmitterHelper sseEmitterHelper;
 
+    /**
+     * 文件服务。
+     */
     @Resource
     private FileService fileService;
 
+    /**
+     * 主线程执行器。
+     */
     @Resource
     private AsyncTaskExecutor mainExecutor;
 
+    /**
+     * 长期记忆服务。
+     */
     @Resource
     private LongTermMemoryService longTermMemoryService;
 
+    /**
+     * 以 SSE 方式发起提问请求。
+     *
+     * @param askReq 提问请求
+     * @return SSE 连接
+     */
     public SseEmitter sseAsk(AskReq askReq) {
         SseEmitter sseEmitter = new SseEmitter(SSE_TIMEOUT);
         User user = ThreadContext.getCurrentUser();
@@ -109,10 +151,18 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         return sseEmitter;
     }
 
+    /**
+     * 校验对话是否合法以及配额是否允许。
+     *
+     * @param sseEmitter SSE 连接
+     * @param user       用户
+     * @param askReq     提问请求
+     * @return 是否允许继续
+     */
     private boolean checkConversation(SseEmitter sseEmitter, User user, AskReq askReq) {
         try {
 
-            //check 1: the conversation has been deleted
+            // 校验 1：对话是否已被删除
             Conversation delConv = conversationService.lambdaQuery()
                     .eq(Conversation::getUuid, askReq.getConversationUuid())
                     .eq(Conversation::getIsDeleted, true)
@@ -122,7 +172,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
                 return false;
             }
 
-            //check 2: conversation quota
+            // 校验 2：对话数量配额
             Long convsCount = conversationService.lambdaQuery()
                     .eq(Conversation::getUserId, user.getId())
                     .eq(Conversation::getIsDeleted, false)
@@ -133,7 +183,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
                 return false;
             }
 
-            //check 3: current user's quota
+            // 校验 3：当前用户配额
             AiModel aiModel = LLMContext.getAiModel(askReq.getModelPlatform(), askReq.getModelName());
             if (null != aiModel && !aiModel.getIsFree()) {
                 ErrorEnum errorMsg = quotaHelper.checkTextQuota(user);
@@ -150,15 +200,21 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         return true;
     }
 
+    /**
+     * 异步校验并发起对话请求。
+     *
+     * @param sseEmitter SSE 连接
+     * @param user       用户
+     * @param askReq     提问请求
+     */
     @Async
     public void asyncCheckAndChat(SseEmitter sseEmitter, User user, AskReq askReq) {
         log.info("asyncCheckAndChat,userId:{}", user.getId());
-        //check business rules
+        // 校验业务规则
         if (!checkConversation(sseEmitter, user, askReq)) {
             return;
         }
-        //questions
-        //system message
+        // 获取对话信息
         Conversation conversation = conversationService.lambdaQuery()
                 .eq(Conversation::getUuid, askReq.getConversationUuid())
                 .oneOpt()
@@ -168,7 +224,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
             return;
         }
 
-        //Send analysing question event to client
+        // 发送“问题分析中”状态给前端
         SSEEmitterHelper.sendPartial(sseEmitter, SSEEventName.STATE_CHANGED, SSEEventData.STATE_QUESTION_ANALYSING);
         //如果是语音输入，将音频转成文本
         if (StringUtils.isNotBlank(askReq.getAudioUuid())) {
@@ -183,19 +239,19 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
 
         AbstractLLMService llmService = LLMContext.getServiceOrDefault(askReq.getModelPlatform(), askReq.getModelName());
 
-        //如果关联了知识库，筛选出有效的知识库以待后续查询，同时发送搜索知识库事件给前端用户
+        // 如果关联了知识库，筛选出有效的知识库以待后续查询，同时通知前端开始搜索
         List<KbInfoResp> filteredKb = new ArrayList<>();
         if (StringUtils.isNotBlank(conversation.getKbIds())) {
             List<Long> kbIds = Arrays.stream(conversation.getKbIds().split(",")).map(Long::parseLong).toList();
             filteredKb = conversationService.filterEnableKb(user, kbIds);
 
-            //Send searching knowledge event to user
+            // 发送“知识库检索中”状态给前端
             SSEEmitterHelper.sendPartial(sseEmitter, SSEEventName.STATE_CHANGED, SSEEventData.STATE_KNOWLEDGE_SEARCHING);
         }
-        //Retrieve contents from knowledge base and conversation memory
+        // 从知识库与会话记忆中检索内容
         List<RetrieverWrapper> retrieverWrappers = retrieve(conversation.getId(), filteredKb, llmService, askReq);
 
-        // Process prompt with retrieved contents and audio settings
+        // 根据检索内容与音频配置加工提示词
         int answerContentType = getAnswerContentType(conversation, askReq);
         boolean answerToAudio = TtsUtil.needTts(llmService.getTtsSetting(), answerContentType);
         Pair<String, String> memoryAndKnowledge = buildMemoryAndKnowledge(retrieverWrappers);
@@ -236,7 +292,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
                     audioInfo.setDuration((int) multimediaInfo.getDuration() / 1000);
                 }
                 audioInfo.setPath(response.getAudioPath());
-                //存储到数据库并返回真实的URL
+                // 存储到数据库并返回真实的 URL
                 AdiFile adiFile = fileService.saveFromPath(user, response.getAudioPath());
                 audioInfo.setUuid(adiFile.getUuid());
                 audioInfo.setUrl(FileOperatorContext.getFileUrl(adiFile));
@@ -244,7 +300,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
             boolean isRefEmbedding = false;
             boolean isRefGraph = false;
             for (RetrieverWrapper wrapper : retrieverWrappers) {
-                //TODO... 记忆相关的引用也要存储到数据库
+                // 待办：记忆相关的引用也要存储到数据库
                 if (!RetrieveContentFrom.KNOWLEDGE_BASE.equals(wrapper.getContentFrom())) {
                     continue;
                 }
@@ -292,7 +348,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
                 ChatModelBuilderProperties.builder()
                         .temperature(LLM_TEMPERATURE_DEFAULT)
                         .build());
-        //Create memory retriever
+        // 创建记忆检索器
         RetrieverCreateParam memoryRetrieveParam = RetrieverCreateParam.builder()
                 .chatModel(chatModel)
                 .filter(new IsEqualTo(CONVERSATION_ID, convId))
@@ -301,7 +357,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
                 .breakIfSearchMissed(false)
                 .build();
         List<RetrieverWrapper> retrieverWrappers = new CompositeRag(RetrieveContentFrom.CONV_MEMORY).createRetriever(memoryRetrieveParam);
-        //Create knowledge base retriever
+        // 创建知识库检索器
         if (!filteredKb.isEmpty()) {
             List<String> kbUuids = filteredKb.stream().map(KbInfoResp::getUuid).toList();
             log.info("准备搜索相关联的知识库,kbUuids:{},question:{}", String.join(",", kbUuids), askReq.getPrompt());
@@ -316,7 +372,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
             List<RetrieverWrapper> kbRetrievers = new CompositeRag(RetrieveContentFrom.KNOWLEDGE_BASE).createRetriever(kbRetrieveParam);
             retrieverWrappers.addAll(kbRetrievers);
         }
-        //Retrieve contents concurrently
+        // 并发检索内容
         if (!retrieverWrappers.isEmpty()) {
             CountDownLatch countDownLatch = new CountDownLatch(retrieverWrappers.size());
             for (RetrieverWrapper retriever : retrieverWrappers) {
@@ -325,7 +381,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
                         List<Content> contents = retriever.getRetriever().retrieve(Query.from(askReq.getPrompt()));
                         retriever.setResponse(contents);
                     } catch (Exception e) {
-                        log.error("Retrieve content error", e);
+                        log.error("检索内容失败", e);
                     } finally {
                         countDownLatch.countDown();
                     }
@@ -334,16 +390,24 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
             try {
                 boolean awaitRet = countDownLatch.await(1, TimeUnit.MINUTES);
                 if (!awaitRet) {
-                    log.warn("retrieveContents CountDownLatch await timeout");
+                    log.warn("检索等待超时");
                 }
             } catch (InterruptedException e) {
-                log.error("retrieveContents CountDownLatch await error", e);
+                log.error("检索等待异常", e);
                 Thread.currentThread().interrupt();
             }
         }
         return retrieverWrappers;
     }
 
+    /**
+     * 查询会话中的问题消息列表。
+     *
+     * @param convId   会话 ID
+     * @param maxId    最大消息 ID
+     * @param pageSize 页大小
+     * @return 消息列表
+     */
     public List<ConversationMessage> listQuestionsByConvId(long convId, long maxId, int pageSize) {
         LambdaQueryWrapper<ConversationMessage> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(ConversationMessage::getConversationId, convId);
@@ -355,6 +419,17 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         return getBaseMapper().selectList(queryWrapper);
     }
 
+    /**
+     * 在模型回复后保存消息、引用与消耗统计。
+     *
+     * @param user        用户
+     * @param askReq      提问请求
+     * @param retrievers  检索器列表
+     * @param response    回复内容
+     * @param questionMeta 问题元信息
+     * @param answerMeta  答案元信息
+     * @param audioInfo   音频信息
+     */
     @Transactional
     public void saveAfterAiResponse(User user, AskReq askReq, List<RetrieverWrapper> retrievers, LLMResponseContent response, PromptMeta questionMeta, AnswerMeta answerMeta, AudioInfo audioInfo) {
         Conversation conversation;
@@ -368,12 +443,12 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
                 .oneOpt()
                 .orElseGet(() -> conversationService.createByFirstMessage(user.getId(), convUuid, prompt));
         AiModel aiModel = LLMContext.getAiModel(modelPlatform, modelName);
-        //Check if regenerate question
+        // 判断是否为重新生成的问题
         ConversationMessage promptMsg;
         if (StringUtils.isNotBlank(askReq.getRegenerateQuestionUuid())) {
             promptMsg = getPromptMsgByQuestionUuid(askReq.getRegenerateQuestionUuid());
         } else {
-            //Save new question message
+            // 保存新的问题消息
             ConversationMessage question = new ConversationMessage();
             question.setUserId(user.getId());
             question.setUuid(questionMeta.getUuid());
@@ -393,7 +468,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
             promptMsg = this.lambdaQuery().eq(ConversationMessage::getUuid, questionMeta.getUuid()).one();
         }
 
-        //save response message
+        // 保存回复消息
         ConversationMessage aiAnswer = new ConversationMessage();
         aiAnswer.setUserId(user.getId());
         aiAnswer.setUuid(answerMeta.getUuid());
@@ -402,8 +477,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         aiAnswer.setMessageRole(ChatMessageRoleEnum.ASSISTANT.getValue());
         aiAnswer.setThinkingContent(Objects.toString(response.getThinkingContent(), ""));
         aiAnswer.setRemark(response.getContent());
-        //TODO 过滤或转换AI返回的内容
-        //aiAnswer.setProcessedRemark("");
+        // 待办：过滤或转换 AI 返回的内容
         aiAnswer.setAudioUuid(null == audioInfo ? "" : Objects.toString(audioInfo.getUuid(), ""));
         aiAnswer.setAudioDuration(null == audioInfo ? 0 : audioInfo.getDuration());
         aiAnswer.setTokens(answerMeta.getTokens());
@@ -419,7 +493,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
 
         calcTodayCost(user, conversation, questionMeta, answerMeta, aiModel.getIsFree());
 
-        //Short-term memory
+        // 写入短期记忆
         if (Boolean.TRUE.equals(conversation.getUnderstandContextEnable())) {
             MapDBChatMemoryStore mapDBChatMemoryStore = MapDBChatMemoryStore.getSingleton();
             List<ChatMessage> messages = mapDBChatMemoryStore.getMessages(askReq.getConversationUuid());
@@ -428,20 +502,28 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
             mapDBChatMemoryStore.updateMessages(askReq.getConversationUuid(), newMessages);
         }
 
-        // TODO... 部分视觉模型如 qwen2-vl-7b-instruct 不支持 json 结构返回内容，待处理
+        // 待办：部分视觉模型如 qwen2-vl-7b-instruct 不支持 JSON 结构返回内容，待处理
         if (!aiModel.getType().equalsIgnoreCase(ModelType.VISION)) {
-            //Long-term memory
+            // 写入长期记忆
             longTermMemoryService.asyncAdd(conversation.getId(), modelPlatform, modelName, askReq.getPrompt(), response.getContent());
-            //TODO async calculate token cost and update user day cost (include long-term memory analyze cost)
-            // Pair<Integer, Integer> inputOutputTokenCost = LLMTokenUtil.calAllTokenCostByUuid(stringRedisTemplate, updateQaParams.getSseAskParams().getUuid());
+            // 待办：异步计算 token 消耗并更新用户日统计（包含长期记忆分析消耗）
         }
     }
 
+    /**
+     * 统计并累计当天的 token 消耗。
+     *
+     * @param user         用户
+     * @param conversation 会话
+     * @param questionMeta 问题元信息
+     * @param answerMeta   答案元信息
+     * @param isFreeToken  是否免费额度
+     */
     private void calcTodayCost(User user, Conversation conversation, PromptMeta questionMeta, AnswerMeta answerMeta, boolean isFreeToken) {
 
         int todayTokenCost = questionMeta.getTokens() + answerMeta.getTokens();
         try {
-            //calculate conversation tokens
+            // 计算会话累计 token
             conversationService.lambdaUpdate()
                     .eq(Conversation::getId, conversation.getId())
                     .set(Conversation::getTokens, conversation.getTokens() + todayTokenCost)
@@ -453,10 +535,22 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         }
     }
 
+    /**
+     * 通过问题 UUID 获取对应消息。
+     *
+     * @param questionUuid 问题 UUID
+     * @return 消息实体
+     */
     private ConversationMessage getPromptMsgByQuestionUuid(String questionUuid) {
         return this.lambdaQuery().eq(ConversationMessage::getUuid, questionUuid).oneOpt().orElseThrow(() -> new BaseException(B_MESSAGE_NOT_FOUND));
     }
 
+    /**
+     * 软删除消息。
+     *
+     * @param uuid 消息 UUID
+     * @return 是否删除成功
+     */
     public boolean softDelete(String uuid) {
         return this.lambdaUpdate()
                 .eq(ConversationMessage::getUuid, uuid)
@@ -466,6 +560,12 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
                 .update();
     }
 
+    /**
+     * 根据音频 UUID 获取文本内容。
+     *
+     * @param audioUuid 音频 UUID
+     * @return 文本内容
+     */
     public String getTextByAudioUuid(String audioUuid) {
         if (StringUtils.isBlank(audioUuid)) {
             return null;
@@ -483,11 +583,18 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         return conversationMessage.getRemark();
     }
 
+    /**
+     * 创建消息引用记录（向量或图谱）。
+     *
+     * @param wrappers 检索器列表
+     * @param user     用户
+     * @param msgId    消息 ID
+     */
     private void createRef(List<RetrieverWrapper> wrappers, User user, Long msgId) {
         if (CollectionUtils.isEmpty(wrappers)) {
             return;
         }
-        //TODO... 记忆相关的引用也要存储到数据库
+        // 待办：记忆相关的引用也要存储到数据库
         for (RetrieverWrapper wrapper : wrappers) {
             if (!RetrieveContentFrom.KNOWLEDGE_BASE.equals(wrapper.getContentFrom())) {
                 continue;
@@ -545,12 +652,19 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         conversationMessageRefGraphService.save(refGraph);
     }
 
+    /**
+     * 构建对话模型请求参数。
+     *
+     * @param conversation 对话
+     * @param askReq       请求参数
+     * @return 请求参数对象
+     */
     private ChatModelRequestParams buildChatRequestParams(Conversation conversation, AskReq askReq) {
         ChatModelRequestParams.ChatModelRequestParamsBuilder builder = ChatModelRequestParams.builder();
         if (StringUtils.isNotBlank(conversation.getAiSystemMessage())) {
             builder.systemMessage(conversation.getAiSystemMessage());
         }
-        //history message
+        // 是否启用历史消息
         if (Boolean.TRUE.equals(conversation.getUnderstandContextEnable())) {
             builder.memoryId(askReq.getConversationUuid());
         }
@@ -570,12 +684,12 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         }
         builder.mcpClients(mcpClients);
 
-        //Enable thinking
+        // 是否开启思考过程
         AiModel aiModel = LLMContext.getServiceOrDefault(askReq.getModelPlatform(), askReq.getModelName()).getAiModel();
         Boolean returnThinking = checkIfReturnThinking(aiModel, conversation);
         builder.returnThinking(returnThinking);
 
-        //Enable web search
+        // 是否开启网页搜索
         builder.enableWebSearch(Boolean.TRUE.equals(conversation.getIsEnableWebSearch()));
 
         return builder.build();
@@ -597,6 +711,12 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         return answerContentType;
     }
 
+    /**
+     * 将检索结果拼装为记忆与知识库文本。
+     *
+     * @param wrappers 检索结果
+     * @return 记忆文本与知识文本
+     */
     private Pair<String, String> buildMemoryAndKnowledge(List<RetrieverWrapper> wrappers) {
         StringBuilder memory = new StringBuilder();
         StringBuilder knowledge = new StringBuilder();

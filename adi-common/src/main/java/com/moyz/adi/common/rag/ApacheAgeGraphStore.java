@@ -25,17 +25,53 @@ import static com.moyz.adi.common.enums.ErrorEnum.B_DB_ERROR;
 import static dev.langchain4j.internal.Utils.getOrDefault;
 import static dev.langchain4j.internal.ValidationUtils.*;
 
+/**
+ * 基于 Apache AGE 的图谱存储实现。
+ */
 public class ApacheAgeGraphStore implements GraphStore {
 
+    /**
+     * 日志记录器。
+     */
     private static final Logger log = LoggerFactory.getLogger(ApacheAgeGraphStore.class);
 
+    /**
+     * 数据库主机。
+     */
     private final String host;
+    /**
+     * 数据库端口。
+     */
     private final Integer port;
+    /**
+     * 数据库用户名。
+     */
     private final String user;
+    /**
+     * 数据库密码。
+     */
     private final String password;
+    /**
+     * 数据库名称。
+     */
     private final String database;
+    /**
+     * 图谱名称。
+     */
     private final String graph;
 
+    /**
+     * 构建 Apache AGE 图谱存储。
+     *
+     * @param host 主机
+     * @param port 端口
+     * @param user 用户名
+     * @param password 密码
+     * @param database 数据库名称
+     * @param graphName 图谱名称
+     * @param createGraph 是否创建图谱
+     * @param dropGraphFirst 是否先删除旧图谱
+     */
     @Builder
     public ApacheAgeGraphStore(String host,
                                Integer port,
@@ -72,6 +108,12 @@ public class ApacheAgeGraphStore implements GraphStore {
         }
     }
 
+    /**
+     * 批量新增顶点。
+     *
+     * @param vertexes 顶点列表
+     * @return 是否新增成功
+     */
     @Override
     public boolean addVertexes(List<GraphVertex> vertexes) {
         ensureNotEmpty(vertexes, vertexes.toString());
@@ -100,6 +142,12 @@ public class ApacheAgeGraphStore implements GraphStore {
         return true;
     }
 
+    /**
+     * 新增单个顶点。
+     *
+     * @param vertex 顶点
+     * @return 是否新增成功
+     */
     @Override
     public boolean addVertex(GraphVertex vertex) {
         log.info("Add vertex:{}", vertex);
@@ -109,10 +157,10 @@ public class ApacheAgeGraphStore implements GraphStore {
     }
 
     /**
-     * Update vertex
+     * 更新顶点信息。
      *
-     * @param updateInfo
-     * @return
+     * @param updateInfo 更新信息
+     * @return 更新后的顶点
      */
     @Override
     public GraphVertex updateVertex(GraphVertexUpdateInfo updateInfo) {
@@ -158,6 +206,12 @@ public class ApacheAgeGraphStore implements GraphStore {
         }
     }
 
+    /**
+     * 获取单个顶点。
+     *
+     * @param search 查询条件
+     * @return 顶点信息
+     */
     @Override
     public GraphVertex getVertex(GraphVertexSearch search) {
         List<GraphVertex> list = this.searchVertices(search);
@@ -167,6 +221,12 @@ public class ApacheAgeGraphStore implements GraphStore {
         return list.get(0);
     }
 
+    /**
+     * 批量获取顶点。
+     *
+     * @param ids 顶点 ID 列表
+     * @return 顶点列表
+     */
     @Override
     public List<GraphVertex> getVertices(List<String> ids) {
         List<Long> longIds = ids.stream().map(Long::parseLong).toList();
@@ -190,8 +250,10 @@ public class ApacheAgeGraphStore implements GraphStore {
     }
 
     /**
-     * @param search
-     * @return
+     * 搜索顶点。
+     *
+     * @param search 查询条件
+     * @return 顶点列表
      */
     @Override
     public List<GraphVertex> searchVertices(GraphVertexSearch search) {
@@ -224,6 +286,12 @@ public class ApacheAgeGraphStore implements GraphStore {
         }
     }
 
+    /**
+     * 批量获取边及两端顶点。
+     *
+     * @param ids 边 ID 列表
+     * @return 边与顶点三元组列表
+     */
     @Override
     public List<Triple<GraphVertex, GraphEdge, GraphVertex>> getEdges(List<String> ids) {
         try (Connection connection = setupConnection()) {
@@ -245,6 +313,12 @@ public class ApacheAgeGraphStore implements GraphStore {
         }
     }
 
+    /**
+     * 搜索边及两端顶点。
+     *
+     * @param search 查询条件
+     * @return 边与顶点三元组列表
+     */
     @Override
     public List<Triple<GraphVertex, GraphEdge, GraphVertex>> searchEdges(GraphEdgeSearch search) {
         try (Connection connection = setupConnection()) {
@@ -288,6 +362,12 @@ public class ApacheAgeGraphStore implements GraphStore {
         }
     }
 
+    /**
+     * 获取单条边及两端顶点。
+     *
+     * @param search 查询条件
+     * @return 边与顶点三元组
+     */
     @Override
     public Triple<GraphVertex, GraphEdge, GraphVertex> getEdge(GraphEdgeSearch search) {
         List<Triple<GraphVertex, GraphEdge, GraphVertex>> list = this.searchEdges(search);
@@ -297,6 +377,12 @@ public class ApacheAgeGraphStore implements GraphStore {
         return list.get(0);
     }
 
+    /**
+     * 新增边并返回完整信息。
+     *
+     * @param addInfo 新增信息
+     * @return 边与顶点三元组
+     */
     @Override
     public Triple<GraphVertex, GraphEdge, GraphVertex> addEdge(GraphEdgeAddInfo addInfo) {
         ensureNotNull(addInfo.getEdge(), "Grahp edge");
@@ -329,6 +415,12 @@ public class ApacheAgeGraphStore implements GraphStore {
         }
     }
 
+    /**
+     * 更新边并返回完整信息。
+     *
+     * @param edgeEditInfo 编辑信息
+     * @return 边与顶点三元组
+     */
     @Override
     public Triple<GraphVertex, GraphEdge, GraphVertex> updateEdge(GraphEdgeEditInfo edgeEditInfo) {
         log.info("Update edge:{}", edgeEditInfo);
@@ -373,10 +465,10 @@ public class ApacheAgeGraphStore implements GraphStore {
     }
 
     /**
-     * 删除顶点(以及边)
+     * 删除顶点（可选删除关联边）。
      *
-     * @param filter
-     * @param includeEdges
+     * @param filter 过滤条件
+     * @param includeEdges 是否包含边
      */
     @Override
     public void deleteVertices(GraphSearchCondition filter, boolean includeEdges) {
@@ -405,9 +497,9 @@ public class ApacheAgeGraphStore implements GraphStore {
     }
 
     /**
-     * 单独删除边
+     * 单独删除边。
      *
-     * @param filter
+     * @param filter 过滤条件
      */
     @Override
     public void deleteEdges(GraphSearchCondition filter) {
@@ -435,6 +527,12 @@ public class ApacheAgeGraphStore implements GraphStore {
         }
     }
 
+    /**
+     * 将结果集转换为边与顶点三元组列表。
+     *
+     * @param resultSet 结果集
+     * @return 三元组列表
+     */
     private List<Triple<GraphVertex, GraphEdge, GraphVertex>> getEdgesFromResultSet(ResultSet resultSet) {
         List<Triple<GraphVertex, GraphEdge, GraphVertex>> result = new ArrayList<>();
         try {
@@ -451,6 +549,12 @@ public class ApacheAgeGraphStore implements GraphStore {
         return result;
     }
 
+    /**
+     * 获取单个边的结果。
+     *
+     * @param resultSet 结果集
+     * @return 边与顶点三元组
+     */
     public Triple<GraphVertex, GraphEdge, GraphVertex> getEdgeFromResultSet(ResultSet resultSet) {
         List<Triple<GraphVertex, GraphEdge, GraphVertex>> list = getEdgesFromResultSet(resultSet);
         if (list.isEmpty()) {
@@ -459,6 +563,12 @@ public class ApacheAgeGraphStore implements GraphStore {
         return list.get(0);
     }
 
+    /**
+     * 获取单个顶点的结果。
+     *
+     * @param resultSet 结果集
+     * @return 顶点
+     */
     public GraphVertex getVertexFromResultSet(ResultSet resultSet) {
         List<GraphVertex> vertices = getVerticesFromResultSet(resultSet);
         if (vertices.isEmpty()) {
@@ -467,6 +577,12 @@ public class ApacheAgeGraphStore implements GraphStore {
         return vertices.get(0);
     }
 
+    /**
+     * 将结果集转换为顶点列表。
+     *
+     * @param resultSet 结果集
+     * @return 顶点列表
+     */
     public List<GraphVertex> getVerticesFromResultSet(ResultSet resultSet) {
         List<GraphVertex> vertices = new ArrayList<>();
         try {
@@ -481,6 +597,12 @@ public class ApacheAgeGraphStore implements GraphStore {
         return vertices;
     }
 
+    /**
+     * 将 Agtype 转换为 GraphVertex。
+     *
+     * @param agtype AGE 类型对象
+     * @return 顶点对象
+     */
     public GraphVertex agTypeToVertex(Agtype agtype) {
         AgtypeMap agtypeMap = agtype.getMap();
         String id = String.valueOf(agtypeMap.getLong("id"));
@@ -500,6 +622,12 @@ public class ApacheAgeGraphStore implements GraphStore {
                 .build();
     }
 
+    /**
+     * 将 Agtype 转换为 GraphEdge。
+     *
+     * @param agtype AGE 类型对象
+     * @return 边对象
+     */
     private GraphEdge agTypeToEdge(Agtype agtype) {
         AgtypeMap agtypeMap = agtype.getMap();
         Long id = agtypeMap.getLong("id");
@@ -524,6 +652,12 @@ public class ApacheAgeGraphStore implements GraphStore {
     }
 
     @SuppressWarnings("java:S2095")
+    /**
+     * 创建数据库连接并完成必要初始化。
+     *
+     * @return 数据库连接
+     * @throws SQLException SQL 异常
+     */
     private Connection setupConnection() throws SQLException {
         PgConnection connection = DriverManager.getConnection(
                 String.format("jdbc:postgresql://%s:%s/%s", host, port, database),

@@ -13,10 +13,19 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * 知识库问答图谱引用服务。
+ */
 @Slf4j
 @Service
 public class KnowledgeBaseQaRefGraphService extends ServiceImpl<KnowledgeBaseQaRecordRefGraphMapper, KnowledgeBaseQaRefGraph> {
 
+    /**
+     * 根据问答记录 UUID 获取图谱引用。
+     *
+     * @param aqRecordUuid 问答记录 UUID
+     * @return 图谱引用 DTO
+     */
     public RefGraphDto getByQaUuid(String aqRecordUuid) {
         List<KnowledgeBaseQaRefGraph> list = this.getBaseMapper().listByQaUuid(aqRecordUuid);
         if (list.isEmpty()) {

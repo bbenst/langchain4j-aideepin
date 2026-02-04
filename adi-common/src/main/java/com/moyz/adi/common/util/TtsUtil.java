@@ -2,8 +2,17 @@ package com.moyz.adi.common.util;
 
 import com.moyz.adi.common.cosntant.AdiConstant;
 import com.moyz.adi.common.vo.TtsSetting;
+/**
+ * 语音合成工具类。
+ */
 
 public class TtsUtil {
+
+    /**
+     * 工具类禁止实例化。
+     */
+    private TtsUtil() {
+    }
 
     /**
      * 如果系统设置的语音合成器类型是后端合成，并且当前聊天设置的返回内容是音频，则表示将文本转语音

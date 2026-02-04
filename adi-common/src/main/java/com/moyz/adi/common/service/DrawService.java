@@ -45,49 +45,88 @@ import static com.moyz.adi.common.cosntant.AdiConstant.MP_LIMIT_1;
 import static com.moyz.adi.common.enums.ErrorEnum.*;
 import static com.moyz.adi.common.util.LocalCache.MODEL_ID_TO_OBJ;
 
+/**
+ * 绘图业务服务。
+ */
 @Slf4j
 @Service
 public class DrawService extends ServiceImpl<DrawMapper, Draw> {
 
+    /**
+     * 自身代理对象（用于触发异步方法）。
+     */
     @Resource
     @Lazy
     private DrawService self;
 
+    /**
+     * 应用配置属性。
+     */
     @Resource
     private AdiProperties adiProperties;
 
+    /**
+     * 配额校验辅助。
+     */
     @Resource
     private QuotaHelper quotaHelper;
 
+    /**
+     * 限流辅助。
+     */
     @Resource
     private RateLimitHelper rateLimitHelper;
 
+    /**
+     * 用户日消耗统计服务。
+     */
     @Resource
     private UserDayCostService userDayCostService;
 
+    /**
+     * Redis 操作模板。
+     */
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
+    /**
+     * 文件服务。
+     */
     @Resource
     private FileService fileService;
 
+    /**
+     * 模型服务。
+     */
     @Resource
     private AiModelService aiModelService;
 
+    /**
+     * 绘图收藏服务。
+     */
     @Resource
     private DrawStarService drawStarService;
 
+    /**
+     * 绘图评论服务。
+     */
     @Resource
     private DrawCommentService drawCommentService;
 
+    /**
+     * 用户服务。
+     */
     @Resource
     private UserService userService;
 
+    /**
+     * 校验绘图请求的频率与配额。
+     */
     public void check() {
         User user = ThreadContext.getCurrentUser();
         String askingKey = MessageFormat.format(RedisKeyConstant.USER_DRAWING, user.getId());
         String askingVal = stringRedisTemplate.opsForValue().get(askingKey);
-        //check 1: still waiting response
+        // 校验 1：是否仍在生成中
         if (StringUtils.isNotBlank(askingVal)) {
             throw new BaseException(A_DRAWING);
         }
@@ -103,7 +142,7 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
     }
 
     /**
-     * interacting method 1: Creates an image given a prompt
+     * 交互方式 1：根据提示词生成图片。
      *
      * @param generateImageReq 文生图请求参数
      */
@@ -115,7 +154,7 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
     }
 
     /**
-     * Interacting method 2:  Creates an edited or extended image given an original image and a prompt.
+     * 交互方式 2：基于原图与提示词编辑或扩展图片。
      */
     public String editByOriginalImage(EditImageReq editImageReq) {
         self.check();
@@ -126,7 +165,7 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
     }
 
     /**
-     * interacting method 3: Creates a variation of a given image.
+     * 交互方式 3：基于原图生成变体。
      */
     public String variationImage(VariationImageReq variationImageReq) {
         self.check();
@@ -139,8 +178,8 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
     /**
      * 根据提示词生成图片
      *
-     * @param createImageDto
-     * @return
+     * @param createImageDto 生成参数
+     * @return 绘图任务 UUID
      */
     public String generate(CreateImageDto createImageDto) {
         AiModel aiModel = aiModelService.getByNameOrThrow(createImageDto.getModelName());
@@ -172,9 +211,9 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
     }
 
     /**
-     * Regenerate the image that was fail
+     * 重新生成失败的图片任务。
      *
-     * @param uuid
+     * @param uuid 绘图任务 UUID
      */
     public void regenerate(String uuid) {
         User user = ThreadContext.getCurrentUser();
@@ -187,10 +226,10 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
     }
 
     /**
-     * 异步生成图片
+     * 异步生成图片。
      *
-     * @param draw
-     * @param user
+     * @param draw 绘图任务
+     * @param user 用户
      */
     @Async("imagesExecutor")
     public void createFromRemote(Draw draw, User user) {
@@ -198,7 +237,7 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         stringRedisTemplate.opsForValue().set(drawingKey, "1", 30, TimeUnit.SECONDS);
 
         try {
-            //Increase the number of the request
+            // 增加请求次数计数
             String requestTimesKey = MessageFormat.format(RedisKeyConstant.USER_REQUEST_TEXT_TIMES, user.getId());
             rateLimitHelper.increaseRequestTimes(requestTimesKey, LocalCache.IMAGE_RATE_LIMIT_CONFIG);
 
@@ -224,7 +263,7 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
             String respImagesPath = String.join(",", images);
             updateDrawSuccess(draw.getId(), respImagesPath, imageUuidsJoin);
 
-            //Update the cost of current user
+            // 更新当前用户的消耗统计
             boolean modelIsFree = imageModelService.getAiModel().getIsFree();
             UserDayCost userDayCost = userDayCostService.getTodayCost(user, modelIsFree);
             UserDayCost saveOrUpdateInst = new UserDayCost();
@@ -246,6 +285,13 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         }
     }
 
+    /**
+     * 更新绘图任务为成功状态。
+     *
+     * @param drawId         任务 ID
+     * @param respImagesPath 远程图片路径
+     * @param localImagesUuid 本地图片 UUID 列表字符串
+     */
     public void updateDrawSuccess(Long drawId, String respImagesPath, String localImagesUuid) {
         Draw updateImage = new Draw();
         updateImage.setId(drawId);
@@ -263,6 +309,12 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         }
     }
 
+    /**
+     * 更新绘图任务为失败状态。
+     *
+     * @param drawId  任务 ID
+     * @param failMsg 失败原因
+     */
     public void updateDrawFail(Long drawId, String failMsg) {
         Draw updateImage = new Draw();
         updateImage.setId(drawId);
@@ -271,6 +323,13 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         getBaseMapper().updateById(updateImage);
     }
 
+    /**
+     * 查询当前用户的绘图列表。
+     *
+     * @param maxId    最大 ID
+     * @param pageSize 页大小
+     * @return 绘图列表响应
+     */
     public DrawListResp listByCurrentUser(Long maxId, int pageSize) {
         List<Draw> list = this.lambdaQuery()
                 .eq(Draw::getUserId, ThreadContext.getCurrentUserId())
@@ -307,6 +366,13 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         return listResp;
     }
 
+    /**
+     * 查询当前用户收藏的绘图列表。
+     *
+     * @param maxId    最大 ID
+     * @param pageSize 页大小
+     * @return 绘图列表响应
+     */
     public DrawListResp listStarred(Long maxId, int pageSize) {
         List<DrawStar> stars = drawStarService.listByCurrentUser(maxId, pageSize);
         if (CollectionUtils.isEmpty(stars)) {
@@ -323,6 +389,12 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         return listResp;
     }
 
+    /**
+     * 将绘图实体列表转换为列表响应。
+     *
+     * @param draws 绘图列表
+     * @return 列表响应
+     */
     private DrawListResp drawsToListResp(List<Draw> draws) {
         List<DrawDto> dtoList = new ArrayList<>();
         draws.forEach(item -> dtoList.add(convertDrawToDto(item)));
@@ -332,6 +404,12 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         return result;
     }
 
+    /**
+     * 获取当前用户的绘图详情，不存在则抛异常。
+     *
+     * @param uuid 绘图 UUID
+     * @return 绘图 DTO
+     */
     public DrawDto getOrThrow(String uuid) {
         Draw draw = this.lambdaQuery()
                 .eq(Draw::getUuid, uuid)
@@ -343,6 +421,12 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         return convertDrawToDto(draw);
     }
 
+    /**
+     * 获取绘图实体，不存在则抛异常。
+     *
+     * @param uuid 绘图 UUID
+     * @return 绘图实体
+     */
     public Draw getEntityOrThrow(String uuid) {
         Draw draw = this.lambdaQuery()
                 .eq(Draw::getUuid, uuid)
@@ -354,6 +438,12 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         return draw;
     }
 
+    /**
+     * 获取公开或本人绘图详情。
+     *
+     * @param uuid 绘图 UUID
+     * @return 绘图 DTO
+     */
     public DrawDto getPublicOrMine(String uuid) {
         Draw draw = this.lambdaQuery()
                 .eq(Draw::getUuid, uuid)
@@ -371,6 +461,12 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         }
     }
 
+    /**
+     * 获取当前公开列表中更新的一条绘图。
+     *
+     * @param uuid 当前绘图 UUID
+     * @return 更新后的绘图 DTO
+     */
     public DrawDto newerPublicOne(String uuid) {
         Draw draw = this.lambdaQuery()
                 .eq(Draw::getUuid, uuid)
@@ -393,6 +489,12 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         return null;
     }
 
+    /**
+     * 获取当前公开列表中更早的一条绘图。
+     *
+     * @param uuid 当前绘图 UUID
+     * @return 更早的绘图 DTO
+     */
     public DrawDto olderPublicOne(String uuid) {
         Draw draw = this.lambdaQuery()
                 .eq(Draw::getUuid, uuid)
@@ -415,6 +517,12 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         return null;
     }
 
+    /**
+     * 获取当前收藏列表中更新的一条绘图。
+     *
+     * @param uuid 当前绘图 UUID
+     * @return 更新后的绘图 DTO
+     */
     public DrawDto newerStarredOne(String uuid) {
         Draw draw = this.lambdaQuery()
                 .eq(Draw::getUuid, uuid)
@@ -445,6 +553,12 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         return null;
     }
 
+    /**
+     * 获取当前收藏列表中更早的一条绘图。
+     *
+     * @param uuid 当前绘图 UUID
+     * @return 更早的绘图 DTO
+     */
     public DrawDto olderStarredOne(String uuid) {
         Draw draw = this.lambdaQuery()
                 .eq(Draw::getUuid, uuid)
@@ -475,6 +589,12 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         return null;
     }
 
+    /**
+     * 获取当前用户绘图列表中更新的一条绘图。
+     *
+     * @param uuid 当前绘图 UUID
+     * @return 更新后的绘图 DTO
+     */
     public DrawDto newerMine(String uuid) {
         Draw draw = this.lambdaQuery()
                 .eq(Draw::getUuid, uuid)
@@ -498,6 +618,12 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         return null;
     }
 
+    /**
+     * 获取当前用户绘图列表中更早的一条绘图。
+     *
+     * @param uuid 当前绘图 UUID
+     * @return 更早的绘图 DTO
+     */
     public DrawDto olderMine(String uuid) {
         Draw draw = this.lambdaQuery()
                 .eq(Draw::getUuid, uuid)
@@ -566,6 +692,12 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         return true;
     }
 
+    /**
+     * 将绘图实体转换为前端 DTO。
+     *
+     * @param draw 绘图实体
+     * @return 绘图 DTO
+     */
     private DrawDto convertDrawToDto(Draw draw) {
         DrawDto dto = new DrawDto();
         BeanUtils.copyProperties(draw, dto);
@@ -575,7 +707,7 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
             aiPlatformName = MODEL_ID_TO_OBJ.get(draw.getAiModelId()).getPlatform();
         }
         dto.setAiModelPlatform(aiPlatformName);
-        //Image uuid string to uuid list
+        // 将图片 UUID 字符串转换为列表
         List<String> images = new ArrayList<>();
         if (StringUtils.isNotBlank(dto.getGeneratedImages())) {
             String[] imageUuids = dto.getGeneratedImages().split(",");
@@ -594,7 +726,7 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         boolean isStarred = drawStarService.isStarred(draw.getId(), dto.getUserId());
         dto.setIsStar(isStarred);
 
-        //User
+        // 组装用户信息
         User user = userService.getByUserId(dto.getUserId());
         if (null != user) {
             dto.setUserUuid(user.getUuid());
@@ -603,10 +735,20 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         return dto;
     }
 
+    /**
+     * 软删除绘图记录。
+     *
+     * @param id 绘图 ID
+     */
     private void softDel(Long id) {
         this.lambdaUpdate().eq(Draw::getId, id).set(Draw::getIsDeleted, true).update();
     }
 
+    /**
+     * 统计今天的绘图次数。
+     *
+     * @return 次数
+     */
     public int sumTodayCost() {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime begin = LocalDateTime.of(now.getYear(), now.getMonth(), now.getDayOfMonth(), 0, 0);
@@ -618,6 +760,11 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
                 .intValue();
     }
 
+    /**
+     * 统计本月的绘图次数。
+     *
+     * @return 次数
+     */
     public int sumCurrMonthCost() {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime begin = LocalDateTime.of(now.getYear(), now.getMonth(), 1, 0, 0);
@@ -629,6 +776,14 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
                 .intValue();
     }
 
+    /**
+     * 设置绘图为公开或私有，并可添加水印。
+     *
+     * @param uuid          绘图 UUID
+     * @param isPublic      是否公开
+     * @param withWatermark 是否添加水印
+     * @return 绘图 DTO
+     */
     public DrawDto setDrawPublic(String uuid, Boolean isPublic, Boolean withWatermark) {
         Draw draw = PrivilegeUtil.checkAndGetByUuid(uuid, this.query(), A_AI_IMAGE_NOT_FOUND);
         //生成水印
@@ -652,11 +807,17 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         return getOrThrow(uuid);
     }
 
+    /**
+     * 切换收藏状态并更新收藏数。
+     *
+     * @param uuid 绘图 UUID
+     * @return 绘图 DTO
+     */
     public DrawDto toggleStar(String uuid) {
         DrawDto draw = getOrThrow(uuid);
         drawStarService.toggle(draw.getId(), ThreadContext.getCurrentUserId());
 
-        //Calculate stars
+        // 重新计算收藏数
         boolean starred = drawStarService.isStarred(draw.getId(), ThreadContext.getCurrentUserId());
         int stars = draw.getStarCount() + (starred ? 1 : -1);
         this.lambdaUpdate()
@@ -668,11 +829,26 @@ public class DrawService extends ServiceImpl<DrawMapper, Draw> {
         return draw;
     }
 
+    /**
+     * 新增绘图评论。
+     *
+     * @param drawUuid 绘图 UUID
+     * @param remark   评论内容
+     * @return 评论 DTO
+     */
     public DrawCommentDto addComment(String drawUuid, String remark) {
         Draw draw = getEntityOrThrow(drawUuid);
         return drawCommentService.add(ThreadContext.getCurrentUser(), draw, remark);
     }
 
+    /**
+     * 分页查询绘图评论。
+     *
+     * @param drawUuid    绘图 UUID
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 评论分页
+     */
     public Page<DrawCommentDto> listCommentsByPage(String drawUuid, Integer currentPage, Integer pageSize) {
         Draw draw = getEntityOrThrow(drawUuid);
         Page<DrawCommentDto> commentDtoPage = drawCommentService.listByPage(draw.getId(), currentPage, pageSize);

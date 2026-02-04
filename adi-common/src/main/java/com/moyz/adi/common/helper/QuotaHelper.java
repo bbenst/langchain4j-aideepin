@@ -7,14 +7,23 @@ import com.moyz.adi.common.service.UserDayCostService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-
+/**
+ * 额度辅助类。
+ */
 @Slf4j
 @Service
 public class QuotaHelper {
-
+    /**
+     * 用户日成本服务。
+     */
     @Resource
     private UserDayCostService userDayCostService;
-
+    /**
+     * 检查文本额度。
+     *
+     * @param user 用户
+     * @return 错误码或 null
+     */
     public ErrorEnum checkTextQuota(User user) {
         int userQuotaByTokenDay = user.getQuotaByTokenDaily();
         int userQuotaByTokenMonth = user.getQuotaByTokenMonthly();
@@ -33,10 +42,11 @@ public class QuotaHelper {
     }
 
     /**
-     * Check the generate image request if it can be accepted
+     * 检查图片生成额度。
      *
      * @param user 要检查的用户
-     * @return 错误码
+     * @param isFree 是否免费模型
+     * @return 错误码或 null
      */
     public ErrorEnum checkImageQuota(User user, boolean isFree) {
         int userDailyQuota = user.getQuotaByImageDaily();

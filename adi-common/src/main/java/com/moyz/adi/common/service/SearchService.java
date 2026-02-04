@@ -47,31 +47,55 @@ import static com.moyz.adi.common.cosntant.AdiConstant.SSE_TIMEOUT;
 import static com.moyz.adi.common.enums.ErrorEnum.B_NO_ANSWER;
 
 /**
- * RAG search
+ * RAG 搜索服务。
  */
 @Slf4j
 @Service
 public class SearchService {
 
+    /**
+     * 自身代理对象（用于异步调用）。
+     */
     @Lazy
     @Resource
     private SearchService self;
 
+    /**
+     * SSE 发送辅助。
+     */
     @Resource
     private SSEEmitterHelper sseEmitterHelper;
 
+    /**
+     * 搜索记录服务。
+     */
     @Resource
     private AiSearchRecordService aiSearchRecordService;
 
+    /**
+     * 用户日消耗统计服务。
+     */
     @Resource
     private UserDayCostService userDayCostService;
 
+    /**
+     * 模型服务。
+     */
     @Resource
     private AiModelService aiModelService;
 
+    /**
+     * 异步执行器。
+     */
     @Resource
     private AsyncTaskExecutor mainExecutor;
 
+    /**
+     * 发起搜索请求（SSE）。
+     *
+     * @param req 搜索请求
+     * @return SSE 连接
+     */
     public SseEmitter search(AiSearchReq req) {
         User user = ThreadContext.getCurrentUser();
         SseEmitter sseEmitter = new SseEmitter(SSE_TIMEOUT);
@@ -83,6 +107,13 @@ public class SearchService {
         return sseEmitter;
     }
 
+    /**
+     * 异步执行搜索流程。
+     *
+     * @param user       用户
+     * @param sseEmitter SSE 连接
+     * @param req        搜索请求
+     */
     @Async
     public void asyncSearch(User user, SseEmitter sseEmitter, AiSearchReq req) {
         SearchReturn searchResult = SearchEngineServiceContext.getService(req.getEngineName()).search(req.getSearchText(), "", "", 5);
@@ -113,15 +144,15 @@ public class SearchService {
     }
 
     /**
-     * 1.Search by search engine
-     * 2.Create prompt by search response
-     * 3.Send prompt to llm
+     * 1. 通过搜索引擎检索
+     * 2. 基于搜索结果构建提示词
+     * 3. 发送提示词给大模型
      *
-     * @param user
-     * @param searchText
-     * @param modelName
-     * @param resultItems
-     * @param sseEmitter
+     * @param user        用户
+     * @param searchText  搜索文本
+     * @param modelName   模型名称
+     * @param resultItems 搜索结果
+     * @param sseEmitter  SSE 连接
      */
     public void briefSearch(User user, String searchText, String modelName, List<SearchReturnWebPage> resultItems, SseEmitter sseEmitter) {
         log.info("briefSearch,searchText:{}", searchText);
@@ -165,22 +196,23 @@ public class SearchService {
     }
 
     /**
-     * 1.Search by search engine
-     * 2.Save the response to pgvector
-     * 3.Retrieve document and create prompt
-     * 4.Send prompt to llm
+     * 1. 通过搜索引擎检索
+     * 2. 保存响应到向量库
+     * 3. 召回文档并构建提示词
+     * 4. 发送提示词给大模型
      *
-     * @param user
-     * @param searchText
-     * @param engineName
-     * @param modelName
-     * @param resultItems
-     * @param sseEmitter
+     * @param user        用户
+     * @param searchText  搜索文本
+     * @param engineName  搜索引擎名称
+     * @param modelPlatform 模型平台
+     * @param modelName   模型名称
+     * @param resultItems 搜索结果
+     * @param sseEmitter  SSE 连接
      */
     public void detailSearch(User user, String searchText, String engineName, String modelPlatform, String modelName, List<SearchReturnWebPage> resultItems, SseEmitter sseEmitter) {
         log.info("detailSearch,searchText:{}", searchText);
         AiModel aiModel = LLMContext.getAiModel(modelPlatform, modelName);
-        //Save to DB
+        // 保存搜索记录到数据库
         SearchEngineResp resp = new SearchEngineResp().setItems(resultItems);
         AiSearchRecord newRecord = new AiSearchRecord();
         String searchUuid = UuidUtil.createShort();
@@ -202,13 +234,13 @@ public class SearchService {
                     if (finalI < 2) {
                         content = getContentFromRemote(item);
 
-                        //Fill content with html body text
+                        // 用网页正文内容填充
                         item.setContent(content);
                     } else {
                         content = item.getSnippet();
                     }
 
-                    //embedding
+                    // 向量化入库
                     if (StringUtils.isNotBlank(content)) {
                         Metadata metadata = new Metadata();
                         metadata.put(AdiConstant.MetadataKey.ENGINE_NAME, engineName);
@@ -260,9 +292,9 @@ public class SearchService {
 
             AiSearchRecord updateRecord = new AiSearchRecord();
             updateRecord.setId(existRecord.getId());
-            //Update search engine response content.(with html body text)
+            // 更新搜索结果内容（包含正文）
             updateRecord.setSearchEngineResp(new SearchEngineResp().setItems(resultItems));
-            //TODO 增强后的prompt
+            // 待办：增强后的 prompt
             updateRecord.setPrompt("");
             updateRecord.setPromptTokens(promptMeta.getTokens());
             updateRecord.setAnswer(response);
@@ -273,6 +305,12 @@ public class SearchService {
         });
     }
 
+    /**
+     * 从远程网页获取正文内容。
+     *
+     * @param item 搜索结果条目
+     * @return 正文内容
+     */
     private String getContentFromRemote(SearchReturnWebPage item) {
         String result = "";
         try {

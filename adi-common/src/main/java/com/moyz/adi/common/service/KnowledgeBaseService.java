@@ -56,41 +56,80 @@ import static com.moyz.adi.common.cosntant.RedisKeyConstant.USER_INDEXING;
 import static com.moyz.adi.common.enums.ErrorEnum.*;
 import static com.moyz.adi.common.util.LocalDateTimeUtil.PATTERN_YYYY_MM_DD;
 
+/**
+ * 知识库管理服务。
+ */
 @Slf4j
 @Service
 public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, KnowledgeBase> {
 
+    /**
+     * 自身代理对象（用于触发异步方法）。
+     */
     @Lazy
     @Resource
     private KnowledgeBaseService self;
 
+    /**
+     * Redis 操作模板。
+     */
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
+    /**
+     * 知识点服务。
+     */
     @Resource
     private KnowledgeBaseItemService knowledgeBaseItemService;
 
+    /**
+     * 问答记录服务。
+     */
     @Resource
     private KnowledgeBaseQaService knowledgeBaseQaRecordService;
 
+    /**
+     * 知识库收藏服务。
+     */
     @Resource
     private KnowledgeBaseStarService knowledgeBaseStarRecordService;
 
+    /**
+     * 文件服务。
+     */
     @Resource
     private FileService fileService;
 
+    /**
+     * SSE 发送辅助。
+     */
     @Resource
     private SSEEmitterHelper sseEmitterHelper;
 
+    /**
+     * 用户日消耗统计服务。
+     */
     @Resource
     private UserDayCostService userDayCostService;
 
+    /**
+     * 模型服务。
+     */
     @Resource
     private AiModelService aiModelService;
 
+    /**
+     * 向量服务。
+     */
     @Resource
     private IEmbeddingService embeddingService;
 
+    /**
+     * 新增或更新知识库。
+     *
+     * @param kbEditReq 编辑请求
+     * @return 知识库实体
+     */
     public KnowledgeBase saveOrUpdate(KbEditReq kbEditReq) {
         KnowledgeBase knowledgeBase = new KnowledgeBase();
         BeanUtils.copyProperties(kbEditReq, knowledgeBase, "id", "uuid", "ingestTokenizer", "ingestEmbeddingModel");
@@ -121,6 +160,15 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         return knowledgeBase;
     }
 
+    /**
+     * 批量上传文档并可选择索引。
+     *
+     * @param kbUuid     知识库 UUID
+     * @param embedding  是否进行向量索引
+     * @param docs       文档数组
+     * @param indexTypes 索引类型
+     * @return 文件记录列表
+     */
     public List<AdiFile> uploadDocs(String kbUuid, Boolean embedding, MultipartFile[] docs, List<String> indexTypes) {
         if (ArrayUtils.isEmpty(docs)) {
             return Collections.emptyList();
@@ -142,6 +190,15 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         return result;
     }
 
+    /**
+     * 上传单个文档并可选择索引。
+     *
+     * @param kbUuid           知识库 UUID
+     * @param indexAfterUpload 是否上传后索引
+     * @param doc              文档
+     * @param indexTypes       索引类型
+     * @return 文件记录
+     */
     public AdiFile uploadDoc(String kbUuid, Boolean indexAfterUpload, MultipartFile doc, List<String> indexTypes) {
         KnowledgeBase knowledgeBase = ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(KnowledgeBase::getUuid, kbUuid)
@@ -151,6 +208,15 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         return uploadDoc(knowledgeBase, doc, indexAfterUpload, indexTypes);
     }
 
+    /**
+     * 上传文档并生成知识点记录。
+     *
+     * @param knowledgeBase    知识库
+     * @param doc              文档
+     * @param indexAfterUpload 是否上传后索引
+     * @param indexTypes       索引类型
+     * @return 文件记录
+     */
     private AdiFile uploadDoc(KnowledgeBase knowledgeBase, MultipartFile doc, Boolean indexAfterUpload, List<String> indexTypes) {
         try {
             String fileName = doc.getOriginalFilename();
@@ -164,7 +230,7 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
             }
             //创建知识库条目
             String uuid = UuidUtil.createShort();
-            //postgresql不支持\u0000
+            // PostgreSQL 不支持 \u0000
             String content = document.text().replace("\u0000", "");
             KnowledgeBaseItem knowledgeBaseItem = new KnowledgeBaseItem();
             knowledgeBaseItem.setUuid(uuid);
@@ -179,7 +245,7 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
                 indexItems(List.of(uuid), indexTypes);
             }
 
-            //Replace file path with url
+            // 将文件路径替换为访问 URL
             adiFile.setPath(FileOperatorContext.getFileUrl(adiFile));
             return adiFile;
         } catch (Exception e) {
@@ -241,6 +307,15 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         return Boolean.FALSE.equals(stringRedisTemplate.hasKey(userIndexKey));
     }
 
+    /**
+     * 分页查询当前用户的知识库。
+     *
+     * @param keyword             关键词
+     * @param includeOthersPublic 是否包含他人公开知识库
+     * @param currentPage         当前页
+     * @param pageSize            页大小
+     * @return 分页结果
+     */
     public Page<KbInfoResp> searchMine(String keyword, Boolean includeOthersPublic, Integer currentPage, Integer pageSize) {
         Page<KbInfoResp> result = new Page<>();
         User user = ThreadContext.getCurrentUser();
@@ -253,6 +328,14 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         return MPPageUtil.convertToPage(knowledgeBasePage, result, KbInfoResp.class, null);
     }
 
+    /**
+     * 分页搜索知识库。
+     *
+     * @param req         查询条件
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 分页结果
+     */
     public Page<KbInfoResp> search(KbSearchReq req, Integer currentPage, Integer pageSize) {
         Page<KbInfoResp> result = new Page<>();
         LambdaQueryWrapper<KnowledgeBase> wrapper = new LambdaQueryWrapper<>();
@@ -283,6 +366,12 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         return MPPageUtil.convertToPage(knowledgeBasePage, result, KbInfoResp.class, null);
     }
 
+    /**
+     * 根据 ID 列表查询知识库。
+     *
+     * @param ids 知识库 ID 列表
+     * @return 知识库信息列表
+     */
     public List<KbInfoResp> listByIds(List<Long> ids) {
         if (CollectionUtils.isEmpty(ids)) {
             return Collections.emptyList();
@@ -291,6 +380,12 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         return MPPageUtil.convertToList(knowledgeBases, KbInfoResp.class);
     }
 
+    /**
+     * 软删除知识库。
+     *
+     * @param uuid 知识库 UUID
+     * @return 是否删除成功
+     */
     public boolean softDelete(String uuid) {
         checkPrivilege(null, uuid);
         return ChainWrappers.lambdaUpdateChain(baseMapper)
@@ -299,6 +394,12 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
                 .update();
     }
 
+    /**
+     * 以 SSE 方式发起知识库问答。
+     *
+     * @param qaRecordUuid 问答记录 UUID
+     * @return SSE 连接
+     */
     public SseEmitter sseAsk(String qaRecordUuid) {
         checkRequestTimesOrThrow();
         SseEmitter sseEmitter = new SseEmitter(SSE_TIMEOUT);
@@ -312,11 +413,11 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
     }
 
     /**
-     * Star or unstar
+     * 收藏或取消收藏知识库。
      *
      * @param user   用户
-     * @param kbUuid 知识库uuid
-     * @return true:star;false:unstar
+     * @param kbUuid 知识库 UUID
+     * @return true 表示收藏，false 表示取消收藏
      */
     @Transactional
     public boolean toggleStar(User user, String kbUuid) {
@@ -334,7 +435,7 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
 
             star = true;
         } else {
-            //Deleted means unstar
+            // 已删除表示取消收藏
             knowledgeBaseStarRecordService.lambdaUpdate()
                     .eq(KnowledgeBaseStar::getId, oldRecord.getId())
                     .set(KnowledgeBaseStar::getIsDeleted, !oldRecord.getIsDeleted())
@@ -381,7 +482,7 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
 
         int maxInputTokens = aiModel.getMaxInputTokens();
         int maxResults = knowledgeBase.getRetrieveMaxResults();
-        //maxResults < 1 表示由系统根据设置的模型maxInputTokens自动计算大小
+        // 最大召回数量小于 1 时，由系统根据模型最大输入令牌数自动计算
         if (maxResults < 1) {
             maxResults = EmbeddingRag.getRetrieveMaxResults(qaRecord.getQuestion(), maxInputTokens);
         }
@@ -457,6 +558,11 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         }
     }
 
+    /**
+     * 更新问答记录并写入消耗统计。
+     *
+     * @param updateQaParams 更新参数
+     */
     private void updateQaRecord(UpdateQaParams updateQaParams) {
 
         Pair<Integer, Integer> inputOutputTokenCost = LLMTokenUtil.calAllTokenCostByUuid(stringRedisTemplate, updateQaParams.getSseAskParams().getUuid());
@@ -501,6 +607,12 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         }
     }
 
+    /**
+     * 获取知识库，不存在则抛异常。
+     *
+     * @param kbUuid 知识库 UUID
+     * @return 知识库实体
+     */
     public KnowledgeBase getOrThrow(String kbUuid) {
         return ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(KnowledgeBase::getUuid, kbUuid)
@@ -509,7 +621,7 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
     }
 
     /**
-     * Set update knowledge base stat signal
+     * 标记需要更新知识库统计。
      *
      * @param kbUuid 知识库uuid
      */
@@ -517,6 +629,11 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         stringRedisTemplate.opsForSet().add(KB_STATISTIC_RECALCULATE_SIGNAL, kbUuid);
     }
 
+    /**
+     * 统计当天创建的知识库数量。
+     *
+     * @return 数量
+     */
     public int countTodayCreated() {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime beginTime = LocalDateTime.of(now.getYear(), now.getMonth(), now.getDayOfMonth(), 0, 0, 0);
@@ -524,12 +641,17 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         return baseMapper.countCreatedByTimePeriod(beginTime, endTime);
     }
 
+    /**
+     * 统计全部知识库数量。
+     *
+     * @return 数量
+     */
     public int countAllCreated() {
         return baseMapper.countAllCreated();
     }
 
     /**
-     * Update knowledge base stat
+     * 定时更新知识库统计。
      */
     @Scheduled(fixedDelay = 60 * 1000)
     public void asyncUpdateStatistic() {
@@ -544,6 +666,12 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         }
     }
 
+    /**
+     * 校验用户对知识库的权限。
+     *
+     * @param kbId   知识库 ID
+     * @param kbUuid 知识库 UUID
+     */
     private void checkPrivilege(Long kbId, String kbUuid) {
         if (null == kbId && StringUtils.isBlank(kbUuid)) {
             throw new BaseException(A_PARAMS_ERROR);

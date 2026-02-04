@@ -20,14 +20,26 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 工作流连线服务。
+ */
 @Slf4j
 @Service
 public class WorkflowEdgeService extends ServiceImpl<WorkflowEdgeMapper, WorkflowEdge> {
 
+    /**
+     * 自身代理对象（用于触发事务方法）。
+     */
     @Lazy
     @Resource
     private WorkflowEdgeService self;
 
+    /**
+     * 查询工作流连线 DTO 列表。
+     *
+     * @param workflowId 工作流 ID
+     * @return 连线 DTO 列表
+     */
     public List<WfEdgeReq> listDtoByWfId(long workflowId) {
         List<WorkflowEdge> edges = ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(WorkflowEdge::getWorkflowId, workflowId)
@@ -36,6 +48,12 @@ public class WorkflowEdgeService extends ServiceImpl<WorkflowEdgeMapper, Workflo
         return MPPageUtil.convertToList(edges, WfEdgeReq.class);
     }
 
+    /**
+     * 创建或更新连线列表。
+     *
+     * @param workflowId 工作流 ID
+     * @param edges      连线列表
+     */
     @Transactional
     public void createOrUpdateEdges(Long workflowId, List<WfEdgeReq> edges) {
         for (WfEdgeReq edge : edges) {
@@ -60,6 +78,12 @@ public class WorkflowEdgeService extends ServiceImpl<WorkflowEdgeMapper, Workflo
         }
     }
 
+    /**
+     * 查询工作流连线列表。
+     *
+     * @param workflowId 工作流 ID
+     * @return 连线列表
+     */
     public List<WorkflowEdge> listByWorkflowId(Long workflowId) {
         return ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(WorkflowEdge::getWorkflowId, workflowId)
@@ -67,6 +91,13 @@ public class WorkflowEdgeService extends ServiceImpl<WorkflowEdgeMapper, Workflo
                 .list();
     }
 
+    /**
+     * 复制连线到目标工作流。
+     *
+     * @param workflowId     源工作流 ID
+     * @param targetWorkflow 目标工作流 ID
+     * @return 复制后的连线列表
+     */
     public List<WorkflowEdge> copyByWorkflowId(long workflowId, long targetWorkflow) {
         List<WorkflowEdge> result = new ArrayList<>();
         self.listByWorkflowId(workflowId).forEach(edge -> {
@@ -75,6 +106,13 @@ public class WorkflowEdgeService extends ServiceImpl<WorkflowEdgeMapper, Workflo
         return result;
     }
 
+    /**
+     * 复制单条连线到目标工作流。
+     *
+     * @param targetWorkflow 目标工作流 ID
+     * @param sourceEdge     源连线
+     * @return 新连线
+     */
     public WorkflowEdge copyEdge(long targetWorkflow, WorkflowEdge sourceEdge) {
         WorkflowEdge newEdge = new WorkflowEdge();
         BeanUtils.copyProperties(sourceEdge, newEdge, "id", "uuid", "createTime", "updateTime");
@@ -84,6 +122,12 @@ public class WorkflowEdgeService extends ServiceImpl<WorkflowEdgeMapper, Workflo
         return getById(newEdge.getId());
     }
 
+    /**
+     * 批量删除连线。
+     *
+     * @param workflowId 工作流 ID
+     * @param uuids      连线 UUID 列表
+     */
     @Transactional
     public void deleteEdges(Long workflowId, List<String> uuids) {
         if (CollectionUtils.isEmpty(uuids)) {
@@ -103,6 +147,12 @@ public class WorkflowEdgeService extends ServiceImpl<WorkflowEdgeMapper, Workflo
         }
     }
 
+    /**
+     * 按 UUID 获取连线。
+     *
+     * @param uuid 连线 UUID
+     * @return 连线实体
+     */
     public WorkflowEdge getByUuid(String uuid) {
         return ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(WorkflowEdge::getUuid, uuid)

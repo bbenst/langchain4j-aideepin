@@ -17,12 +17,27 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * MCP 个性化参数定义 JSONB 类型处理器。
+ */
 @MappedJdbcTypes({JdbcType.ARRAY})
 @MappedTypes({List.class})
 public class McpCustomizedParamDefinitionTypeHandler extends BaseTypeHandler<List<McpCustomizedParamDefinition>> {
 
+    /**
+     * JSON 序列化工具。
+     */
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
+    /**
+     * 写入非空参数。
+     *
+     * @param ps 预编译语句
+     * @param i 参数索引
+     * @param parameter 参数值
+     * @param jdbcType JDBC 类型
+     * @throws SQLException SQL 异常
+     */
     @Override
     public void setNonNullParameter(PreparedStatement ps, int i, List<McpCustomizedParamDefinition> parameter, JdbcType jdbcType) throws SQLException {
         PGobject jsonObject = new PGobject();
@@ -36,21 +51,52 @@ public class McpCustomizedParamDefinitionTypeHandler extends BaseTypeHandler<Lis
         }
     }
 
+    /**
+     * 通过列名读取结果。
+     *
+     * @param rs 结果集
+     * @param columnName 列名
+     * @return 参数列表
+     * @throws SQLException SQL 异常
+     */
     @Override
     public List<McpCustomizedParamDefinition> getNullableResult(ResultSet rs, String columnName) throws SQLException {
         return jsonStringToList(rs.getString(columnName));
     }
 
+    /**
+     * 通过列索引读取结果。
+     *
+     * @param rs 结果集
+     * @param columnIndex 列索引
+     * @return 参数列表
+     * @throws SQLException SQL 异常
+     */
     @Override
     public List<McpCustomizedParamDefinition> getNullableResult(ResultSet rs, int columnIndex) throws SQLException {
         return jsonStringToList(rs.getString(columnIndex));
     }
 
+    /**
+     * 通过存储过程列索引读取结果。
+     *
+     * @param cs 存储过程
+     * @param columnIndex 列索引
+     * @return 参数列表
+     * @throws SQLException SQL 异常
+     */
     @Override
     public List<McpCustomizedParamDefinition> getNullableResult(CallableStatement cs, int columnIndex) throws SQLException {
         return jsonStringToList(cs.getString(columnIndex));
     }
 
+    /**
+     * JSON 字符串转参数列表。
+     *
+     * @param json JSON 字符串
+     * @return 参数列表
+     * @throws SQLException 解析异常
+     */
     private List<McpCustomizedParamDefinition> jsonStringToList(String json) throws SQLException {
         if (json == null || json.isEmpty()) {
             return new ArrayList<>();
@@ -62,6 +108,13 @@ public class McpCustomizedParamDefinitionTypeHandler extends BaseTypeHandler<Lis
         }
     }
 
+    /**
+     * 解析 JSON 数组。
+     *
+     * @param jsonArray JSON 数组字符串
+     * @return 参数列表
+     * @throws JsonProcessingException 解析异常
+     */
     private List<McpCustomizedParamDefinition> parseJsonArray(String jsonArray) throws JsonProcessingException {
         List<McpCustomizedParamDefinition> list = JsonUtil.toList(jsonArray, McpCustomizedParamDefinition.class);
         if (null == list || list.isEmpty()) {

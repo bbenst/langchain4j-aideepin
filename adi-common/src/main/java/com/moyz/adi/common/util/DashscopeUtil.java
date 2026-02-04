@@ -4,11 +4,20 @@ package com.moyz.adi.common.util;
 import dev.langchain4j.community.model.dashscope.QwenModelName;
 
 import java.util.stream.Stream;
-
+/**
+ * DashScope 模型名称辅助工具。
+ */
 public class DashscopeUtil {
+    /**
+     * 工具类禁止实例化。
+     */
     private DashscopeUtil() {
     }
-
+    /**
+     * 获取 DashScope 语言模型名称流。
+     *
+     * @return 模型名称流
+     */
     public static Stream<String> languageModelNameProvider() {
         return Stream.of(
                 QwenModelName.QWEN_TURBO,
@@ -35,7 +44,11 @@ public class DashscopeUtil {
                 QwenModelName.QWEN2_5_72B_INSTRUCT
         );
     }
-
+    /**
+     * 获取非多模态对话模型名称流。
+     *
+     * @return 模型名称流
+     */
     public static Stream<String> nonMultimodalChatModelNameProvider() {
         return Stream.of(
                 QwenModelName.QWEN_TURBO,
@@ -62,17 +75,29 @@ public class DashscopeUtil {
                 QwenModelName.QWEN2_5_72B_INSTRUCT
         );
     }
-
+    /**
+     * 获取支持函数调用的对话模型名称流。
+     *
+     * @return 模型名称流
+     */
     public static Stream<String> functionCallChatModelNameProvider() {
         return Stream.of(QwenModelName.QWEN_MAX);
     }
-
+    /**
+     * 获取视觉语言对话模型名称流。
+     *
+     * @return 模型名称流
+     */
     public static Stream<String> vlChatModelNameProvider() {
         return Stream.of(
                 QwenModelName.QWEN_VL_PLUS,
                 QwenModelName.QWEN_VL_MAX);
     }
-
+    /**
+     * 获取向量模型名称流。
+     *
+     * @return 模型名称流
+     */
     public static Stream<String> embeddingModelNameProvider() {
         return Stream.of(
                 QwenModelName.TEXT_EMBEDDING_V1,

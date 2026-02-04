@@ -26,25 +26,68 @@ import static dev.langchain4j.internal.ValidationUtils.ensureNotNull;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
+/**
+ * 基于图谱的内容检索器。
+ */
 @Slf4j
 public class GraphStoreContentRetriever implements ContentRetriever {
+    /**
+     * 默认最大返回数量提供器。
+     */
     public static final Function<Query, Integer> DEFAULT_MAX_RESULTS = query -> 3;
+    /**
+     * 默认过滤条件提供器。
+     */
     public static final Function<Query, Filter> DEFAULT_FILTER = query -> null;
 
+    /**
+     * 默认显示名称。
+     */
     public static final String DEFAULT_DISPLAY_NAME = "Default";
 
+    /**
+     * 图谱存储实现。
+     */
     private final GraphStore graphStore;
+    /**
+     * 用于抽取实体关系的聊天模型。
+     */
     private final ChatModel chatModel;
 
+    /**
+     * 最大返回数量提供器。
+     */
     private final Function<Query, Integer> maxResultsProvider;
+    /**
+     * 过滤条件提供器。
+     */
     private final Function<Query, Filter> filterProvider;
 
+    /**
+     * 显示名称。
+     */
     private final String displayName;
 
+    /**
+     * 是否在未命中时中断流程。
+     */
     private final boolean breakIfSearchMissed;
 
+    /**
+     * 图谱引用信息，便于回传给前端。
+     */
     private final RefGraphDto kbQaRecordRefGraphDto = RefGraphDto.builder().vertices(Collections.emptyList()).edges(Collections.emptyList()).entitiesFromQuestion(Collections.emptyList()).build();
 
+    /**
+     * 构建图谱内容检索器。
+     *
+     * @param displayName 显示名称
+     * @param graphStore 图谱存储实现
+     * @param chatModel 抽取模型
+     * @param dynamicMaxResults 最大返回数量提供器
+     * @param dynamicFilter 过滤条件提供器
+     * @param breakIfSearchMissed 是否在未命中时中断
+     */
     @Builder
     private GraphStoreContentRetriever(String displayName,
                                        GraphStore graphStore,
@@ -60,10 +103,22 @@ public class GraphStoreContentRetriever implements ContentRetriever {
         this.breakIfSearchMissed = breakIfSearchMissed;
     }
 
+    /**
+     * 使用指定图谱存储创建检索器。
+     *
+     * @param graphStore 图谱存储实现
+     * @return 检索器实例
+     */
     public static GraphStoreContentRetriever from(GraphStore graphStore) {
         return builder().graphStore(graphStore).build();
     }
 
+    /**
+     * 执行图谱检索并返回内容列表。
+     *
+     * @param query 查询参数
+     * @return 内容列表
+     */
     @Override
     public List<Content> retrieve(Query query) {
         log.info("Graph retrieve,query:{}", query);
@@ -90,7 +145,7 @@ public class GraphStoreContentRetriever implements ContentRetriever {
                 entities.add(AdiStringUtil.clearStr(targetName));
             }
         }
-        //判断是否要强行中断查询，没有命中则不再进行下一步操作（比如说请求LLM），直接抛出异常中断流程
+        // 未命中时直接中断流程，避免继续调用下游模型。
         if (breakIfSearchMissed && entities.isEmpty()) {
             log.warn("Graph search missed");
             throw new BaseException(B_BREAK_SEARCH);
@@ -134,12 +189,26 @@ public class GraphStoreContentRetriever implements ContentRetriever {
         return vertexContents;
     }
 
+    /**
+     * 获取本次检索的图谱引用信息。
+     *
+     * @return 引用信息
+     */
     public RefGraphDto getGraphRef() {
         return kbQaRecordRefGraphDto;
     }
 
+    /**
+     * 自定义构建器，提供便捷配置。
+     */
     public static class GraphStoreContentRetrieverBuilder {
 
+        /**
+         * 设置最大返回数量。
+         *
+         * @param maxResults 最大数量
+         * @return 构建器
+         */
         public GraphStoreContentRetrieverBuilder maxResults(Integer maxResults) {
             if (maxResults != null) {
                 dynamicMaxResults = (query) -> ensureGreaterThanZero(maxResults, "maxResults");
@@ -147,6 +216,12 @@ public class GraphStoreContentRetriever implements ContentRetriever {
             return this;
         }
 
+        /**
+         * 设置过滤条件。
+         *
+         * @param filter 过滤条件
+         * @return 构建器
+         */
         public GraphStoreContentRetrieverBuilder filter(Filter filter) {
             if (filter != null) {
                 dynamicFilter = (query) -> filter;
@@ -154,6 +229,12 @@ public class GraphStoreContentRetriever implements ContentRetriever {
             return this;
         }
 
+        /**
+         * 设置未命中时是否中断流程。
+         *
+         * @param breakFlag 是否中断
+         * @return 构建器
+         */
         public GraphStoreContentRetrieverBuilder breakIfSearchMissed(boolean breakFlag) {
             breakIfSearchMissed = breakFlag;
             return this;

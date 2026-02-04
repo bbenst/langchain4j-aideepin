@@ -28,14 +28,26 @@ import static com.moyz.adi.common.cosntant.RedisKeyConstant.WORKFLOW_COMPONENTS;
 import static com.moyz.adi.common.cosntant.RedisKeyConstant.WORKFLOW_COMPONENT_START_KEY;
 import static com.moyz.adi.common.enums.ErrorEnum.C_WF_COMPONENT_DELETED_FAIL_BY_USED;
 
+/**
+ * 工作流组件服务。
+ */
 @Slf4j
 @Service
 public class WorkflowComponentService extends ServiceImpl<WorkflowComponentMapper, WorkflowComponent> {
 
+    /**
+     * 自身代理对象（用于缓存更新）。
+     */
     @Lazy
     @Resource
     private WorkflowComponentService self;
 
+    /**
+     * 新增或更新组件。
+     *
+     * @param req 组件请求
+     * @return 组件实体
+     */
     @CacheEvict(cacheNames = {WORKFLOW_COMPONENTS, WORKFLOW_COMPONENT_START_KEY})
     public WorkflowComponent addOrUpdate(WfComponentReq req) {
         WorkflowComponent wfComponent;
@@ -63,6 +75,12 @@ public class WorkflowComponentService extends ServiceImpl<WorkflowComponentMappe
         }
     }
 
+    /**
+     * 启用或禁用组件。
+     *
+     * @param uuid     组件 UUID
+     * @param isEnable 是否启用
+     */
     @CacheEvict(cacheNames = {WORKFLOW_COMPONENTS, WORKFLOW_COMPONENT_START_KEY})
     public void enable(String uuid, Boolean isEnable) {
         WorkflowComponent wfComponent = PrivilegeUtil.checkAndGetByUuid(uuid, this.query(), ErrorEnum.A_WF_COMPONENT_NOT_FOUND);
@@ -72,6 +90,11 @@ public class WorkflowComponentService extends ServiceImpl<WorkflowComponentMappe
         this.baseMapper.updateById(update);
     }
 
+    /**
+     * 删除组件（若已被节点引用则不允许删除）。
+     *
+     * @param uuid 组件 UUID
+     */
     @CacheEvict(cacheNames = {WORKFLOW_COMPONENTS, WORKFLOW_COMPONENT_START_KEY})
     public void deleteByUuid(String uuid) {
         Integer refNodeCount = baseMapper.countRefNodes(uuid);
@@ -82,6 +105,14 @@ public class WorkflowComponentService extends ServiceImpl<WorkflowComponentMappe
         }
     }
 
+    /**
+     * 分页查询组件列表。
+     *
+     * @param searchReq   查询条件
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 分页结果
+     */
     public Page<WorkflowComponent> search(WfComponentSearchReq searchReq, Integer currentPage, Integer pageSize) {
         LambdaQueryWrapper<WorkflowComponent> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(WorkflowComponent::getIsDeleted, false);
@@ -91,6 +122,11 @@ public class WorkflowComponentService extends ServiceImpl<WorkflowComponentMappe
         return baseMapper.selectPage(new Page<>(currentPage, pageSize), wrapper);
     }
 
+    /**
+     * 获取全部启用的组件。
+     *
+     * @return 组件列表
+     */
     @Cacheable(cacheNames = WORKFLOW_COMPONENTS)
     public List<WorkflowComponent> getAllEnable() {
         return ChainWrappers.lambdaQueryChain(baseMapper)
@@ -100,6 +136,11 @@ public class WorkflowComponentService extends ServiceImpl<WorkflowComponentMappe
                 .list();
     }
 
+    /**
+     * 获取开始组件。
+     *
+     * @return 开始组件
+     */
     @Cacheable(cacheNames = WORKFLOW_COMPONENT_START_KEY)
     public WorkflowComponent getStartComponent() {
         List<WorkflowComponent> components = self.getAllEnable();
@@ -109,6 +150,12 @@ public class WorkflowComponentService extends ServiceImpl<WorkflowComponentMappe
                 .orElseThrow(() -> new BaseException(ErrorEnum.B_WF_NODE_DEFINITION_NOT_FOUND));
     }
 
+    /**
+     * 根据 ID 获取组件。
+     *
+     * @param id 组件 ID
+     * @return 组件实体
+     */
     public WorkflowComponent getComponent(Long id) {
         List<WorkflowComponent> components = self.getAllEnable();
         return components.stream()

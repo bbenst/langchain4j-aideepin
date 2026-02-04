@@ -12,10 +12,20 @@ import com.moyz.adi.common.util.MPPageUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+/**
+ * 知识库收藏服务。
+ */
 @Slf4j
 @Service
 public class KnowledgeBaseStarService extends ServiceImpl<KnowledgeBaseStarMapper, KnowledgeBaseStar> {
 
+    /**
+     * 判断用户是否收藏知识库。
+     *
+     * @param userId 用户 ID
+     * @param kbUuid 知识库 UUID
+     * @return 是否已收藏
+     */
     public boolean isStarred(Long userId, String kbUuid) {
         return ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(KnowledgeBaseStar::getUserId, userId)
@@ -24,6 +34,13 @@ public class KnowledgeBaseStarService extends ServiceImpl<KnowledgeBaseStarMappe
                 .exists();
     }
 
+    /**
+     * 获取收藏记录。
+     *
+     * @param userId 用户 ID
+     * @param kbUuid 知识库 UUID
+     * @return 收藏记录
+     */
     public KnowledgeBaseStar getRecord(long userId, String kbUuid){
         return ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(KnowledgeBaseStar::getUserId, userId)
@@ -32,6 +49,14 @@ public class KnowledgeBaseStarService extends ServiceImpl<KnowledgeBaseStarMappe
                 .orElse(null);
     }
 
+    /**
+     * 获取用户收藏列表。
+     *
+     * @param user        用户
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 收藏分页信息
+     */
     public Page<KbStarInfoResp> listStarInfo(User user, int currentPage, int pageSize) {
         LambdaQueryWrapper<KnowledgeBaseStar> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(KnowledgeBaseStar::getIsDeleted, false);

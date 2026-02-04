@@ -17,21 +17,56 @@ import java.util.stream.Stream;
 
 import static org.neo4j.cypherdsl.support.schema_name.SchemaNames.sanitize;
 
+/**
+ * Neo4j 向量存储相关的工具方法。
+ */
 class Neo4jEmbeddingUtils {
 
-    /* not-configurable strings, just used under-the-hood in `UNWIND $rows ...` statement */
+    /**
+     * 内部使用的行键，仅用于 `UNWIND $rows ...` 语句。
+     */
     public static final String EMBEDDINGS_ROW_KEY = "embeddingRow";
 
-    /* default configs */
+    /**
+     * 默认 ID 字段名。
+     */
     public static final String DEFAULT_ID_PROP = "id";
+    /**
+     * 默认数据库名称。
+     */
     public static final String DEFAULT_DATABASE_NAME = "neo4j";
+    /**
+     * 默认向量字段名。
+     */
     public static final String DEFAULT_EMBEDDING_PROP = "embedding";
+    /**
+     * 属性字段名。
+     */
     public static final String PROPS = "props";
+    /**
+     * 默认索引名称。
+     */
     public static final String DEFAULT_IDX_NAME = "vector";
+    /**
+     * 默认标签名称。
+     */
     public static final String DEFAULT_LABEL = "Document";
+    /**
+     * 默认文本字段名。
+     */
     public static final String DEFAULT_TEXT_PROP = "text";
+    /**
+     * 默认索引等待超时（秒）。
+     */
     public static final long DEFAULT_AWAIT_INDEX_TIMEOUT = 60L;
 
+    /**
+     * 将 Neo4j 记录转换为向量匹配结果。
+     *
+     * @param store 向量存储
+     * @param neo4jRecord 记录
+     * @return 匹配结果
+     */
     public static EmbeddingMatch<TextSegment> toEmbeddingMatch(AdiNeo4jEmbeddingStore store, Record neo4jRecord) {
         Map<String, String> metaData = new HashMap<>();
         neo4jRecord.get("metadata").asMap().forEach((key, value) -> {
@@ -58,6 +93,16 @@ class Neo4jEmbeddingUtils {
                 textSegment);
     }
 
+    /**
+     * 将向量记录转换为 Neo4j 写入行。
+     *
+     * @param store 向量存储
+     * @param idx 索引位置
+     * @param ids ID 列表
+     * @param embeddings 向量列表
+     * @param embedded 分段列表
+     * @return 写入行
+     */
     public static Map<String, Object> toRecord(
             AdiNeo4jEmbeddingStore store,
             int idx,
@@ -87,6 +132,15 @@ class Neo4jEmbeddingUtils {
         return row;
     }
 
+    /**
+     * 批量切分写入行数据。
+     *
+     * @param store 向量存储
+     * @param ids ID 列表
+     * @param embeddings 向量列表
+     * @param embedded 分段列表
+     * @return 分批行数据流
+     */
     public static Stream<List<Map<String, Object>>> getRowsBatched(
             AdiNeo4jEmbeddingStore store, List<String> ids, List<Embedding> embeddings, List<TextSegment> embedded) {
         int batchSize = 10_000;
@@ -102,6 +156,13 @@ class Neo4jEmbeddingUtils {
         });
     }
 
+    /**
+     * 过滤并校验配置值，若不安全则抛出异常。
+     *
+     * @param value 配置值
+     * @param config 配置项名称
+     * @return 过滤后的值
+     */
     public static String sanitizeOrThrows(String value, String config) {
         return sanitize(value).orElseThrow(() -> {
             String invalidSanitizeValue = String.format(

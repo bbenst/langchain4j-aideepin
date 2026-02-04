@@ -24,28 +24,43 @@ import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
-
+/**
+ * SSE 连接生命周期与消息发送的辅助类。
+ */
 @Slf4j
 @Service
 public class SSEEmitterHelper {
-
+    /**
+     * Redis 模板，用于记录用户请求与限流状态。
+     */
     @Resource
     private StringRedisTemplate stringRedisTemplate;
-
+    /**
+     * 限流检查与计数的辅助组件。
+     */
     @Resource
     private RateLimitHelper rateLimitHelper;
 
+    /**
+     * 记录已完成的 SSE 连接，避免重复发送或回收。
+     */
     private static final Cache<SseEmitter, Boolean> COMPLETED_SSE = CacheBuilder.newBuilder().expireAfterWrite(10, TimeUnit.MINUTES).build();
-
+    /**
+     * 检查请求频率与是否仍处于回答状态。
+     *
+     * @param user       用户信息
+     * @param sseEmitter SSE 连接
+     * @return 是否允许继续请求
+     */
     public boolean checkOrComplete(User user, SseEmitter sseEmitter) {
-        //Check: rate limit
+        // 先做限流检查，避免并发或恶意刷请求。
         String requestTimesKey = MessageFormat.format(RedisKeyConstant.USER_REQUEST_TEXT_TIMES, user.getId());
         if (!rateLimitHelper.checkRequestTimes(requestTimesKey, LocalCache.TEXT_RATE_LIMIT_CONFIG)) {
             sendErrorAndComplete(user.getId(), sseEmitter, "访问太过频繁");
             return false;
         }
 
-        //Check: If still waiting response
+        // 如果当前仍在回答中，直接拒绝新的流式请求。
         String askingKey = MessageFormat.format(RedisKeyConstant.USER_ASKING, user.getId());
         String askingVal = stringRedisTemplate.opsForValue().get(askingKey);
         if (StringUtils.isNotBlank(askingVal)) {
@@ -54,11 +69,22 @@ public class SSEEmitterHelper {
         }
         return true;
     }
-
+    /**
+     * 启动 SSE 连接并发送开始事件。
+     *
+     * @param user       用户信息
+     * @param sseEmitter SSE 连接
+     */
     public void startSse(User user, SseEmitter sseEmitter) {
         this.startSse(user, sseEmitter, null);
     }
-
+    /**
+     * 启动 SSE 连接并发送开始事件，可携带初始数据。
+     *
+     * @param user       用户信息
+     * @param sseEmitter SSE 连接
+     * @param data       可选数据
+     */
     public void startSse(User user, SseEmitter sseEmitter, String data) {
 
         String askingKey = MessageFormat.format(RedisKeyConstant.USER_ASKING, user.getId());
@@ -128,7 +154,13 @@ public class SSEEmitterHelper {
         );
         return askingKey;
     }
-
+    /**
+     * 发送完成事件并关闭 SSE。
+     *
+     * @param userId     用户 ID
+     * @param sseEmitter SSE 连接
+     * @param msg        返回消息
+     */
     public void sendComplete(long userId, SseEmitter sseEmitter, String msg) {
         if (Boolean.TRUE.equals(COMPLETED_SSE.getIfPresent(sseEmitter))) {
             log.warn("sseEmitter already completed,userId:{}", userId);
@@ -145,7 +177,15 @@ public class SSEEmitterHelper {
             sseEmitter.complete();
         }
     }
-
+    /**
+     * 发送包含元数据的完成事件并关闭 SSE。
+     *
+     * @param userId       用户 ID
+     * @param sseEmitter   SSE 连接
+     * @param questionMeta 问题元数据
+     * @param answerMeta   答案元数据
+     * @param audioInfo    音频信息
+     */
     public void sendComplete(long userId, SseEmitter sseEmitter, PromptMeta questionMeta, AnswerMeta answerMeta, AudioInfo audioInfo) {
         ChatMeta chatMeta = new ChatMeta(questionMeta, answerMeta, audioInfo);
         String meta = JsonUtil.toJson(chatMeta).replace("\r\n", "");
@@ -174,7 +214,13 @@ public class SSEEmitterHelper {
             delSseRequesting(userId);
         }
     }
-
+    /**
+     * 发送开始与完成事件并关闭 SSE。
+     *
+     * @param userId     用户 ID
+     * @param sseEmitter SSE 连接
+     * @param msg        返回消息
+     */
     public void sendStartAndComplete(long userId, SseEmitter sseEmitter, String msg) {
         try {
             sseEmitter.send(SseEmitter.event().name(AdiConstant.SSEEventName.START));
@@ -187,7 +233,13 @@ public class SSEEmitterHelper {
             sseEmitter.complete();
         }
     }
-
+    /**
+     * 发送错误事件并关闭 SSE。
+     *
+     * @param userId     用户 ID
+     * @param sseEmitter SSE 连接
+     * @param errorMsg   错误信息
+     */
     public void sendErrorAndComplete(long userId, SseEmitter sseEmitter, String errorMsg) {
         if (Boolean.TRUE.equals(COMPLETED_SSE.getIfPresent(sseEmitter))) {
             log.warn("sseEmitter already completed,ignore error:{}", errorMsg);
@@ -205,16 +257,30 @@ public class SSEEmitterHelper {
             sseEmitter.complete();
         }
     }
-
+    /**
+     * 清除用户的请求占用标记。
+     *
+     * @param userId 用户 ID
+     */
     private void delSseRequesting(long userId) {
         String askingKey = MessageFormat.format(RedisKeyConstant.USER_ASKING, userId);
         stringRedisTemplate.delete(askingKey);
     }
-
+    /**
+     * 解析并发送分段消息。
+     *
+     * @param sseEmitter SSE 连接
+     * @param content    内容
+     */
     public static void parseAndSendPartialMsg(SseEmitter sseEmitter, String content) {
         parseAndSendPartialMsg(sseEmitter, "", content);
     }
-
+    /**
+     * 发送音频事件。
+     *
+     * @param sseEmitter SSE 连接
+     * @param content    音频内容
+     */
     public static void sendAudio(SseEmitter sseEmitter, Object content) {
         try {
             sseEmitter.send(SseEmitter.event().name(AdiConstant.SSEEventName.AUDIO).data(content));
@@ -223,7 +289,12 @@ public class SSEEmitterHelper {
             throw new RuntimeException(e);
         }
     }
-
+    /**
+     * 发送思考中事件。
+     *
+     * @param sseEmitter SSE 连接
+     * @param content    内容
+     */
     public static void sendThinking(SseEmitter sseEmitter, String content) {
         try {
             sseEmitter.send(SseEmitter.event().name(AdiConstant.SSEEventName.THINKING).data(content));
@@ -232,7 +303,13 @@ public class SSEEmitterHelper {
             throw new RuntimeException(e);
         }
     }
-
+    /**
+     * 解析并发送分段消息，可指定事件名。
+     *
+     * @param sseEmitter SSE 连接
+     * @param name       事件名
+     * @param content    内容
+     */
     public static void parseAndSendPartialMsg(SseEmitter sseEmitter, String name, String content) {
         if (Boolean.TRUE.equals(COMPLETED_SSE.getIfPresent(sseEmitter))) {
             log.warn("sseEmitter already completed,name:{}", name);
@@ -251,7 +328,13 @@ public class SSEEmitterHelper {
 //            content = content.replaceAll("[\\r\\n]", "\ndata:");
 //            sendPartial(sseEmitter, name, " " + content);
     }
-
+    /**
+     * 发送分段消息。
+     *
+     * @param sseEmitter SSE 连接
+     * @param name       事件名
+     * @param msg        消息内容
+     */
     public static void sendPartial(SseEmitter sseEmitter, String name, String msg) {
         if (Boolean.TRUE.equals(COMPLETED_SSE.getIfPresent(sseEmitter))) {
             log.warn("sseEmitter already completed,name:{}", name);
@@ -287,7 +370,12 @@ public class SSEEmitterHelper {
         AnswerMeta answerMeta = new AnswerMeta(outputTokenCount, UuidUtil.createShort(), false, false);
         return Pair.of(questionMeta, answerMeta);
     }
-
+    /**
+     * 处理错误并关闭 SSE。
+     *
+     * @param error      错误信息
+     * @param sseEmitter SSE 连接
+     */
     public static void errorAndShutdown(Throwable error, SseEmitter sseEmitter) {
         if (Boolean.TRUE.equals(COMPLETED_SSE.getIfPresent(sseEmitter))) {
             log.warn("sseEmitter already completed,ignore error:{}", error.getMessage());
@@ -311,8 +399,12 @@ public class SSEEmitterHelper {
         }
 
     }
-
-    public void deleteCache(String cache){
+    /**
+     * 删除指定缓存键。
+     *
+     * @param cache 缓存键
+     */
+    public void deleteCache(String cache) {
         stringRedisTemplate.delete(cache);
     }
 }

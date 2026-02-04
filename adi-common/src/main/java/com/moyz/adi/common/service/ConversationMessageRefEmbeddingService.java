@@ -15,13 +15,25 @@ import org.springframework.stereotype.Service;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * 对话消息向量引用服务。
+ */
 @Slf4j
 @Service
 public class ConversationMessageRefEmbeddingService extends ServiceImpl<ConversationMessageRefEmbeddingMapper, ConversationMessageRefEmbedding> {
 
+    /**
+     * 向量检索服务。
+     */
     @Resource
     private IEmbeddingService iEmbeddingService;
 
+    /**
+     * 根据消息 UUID 查询引用向量。
+     *
+     * @param msgUuid 消息 UUID
+     * @return 引用向量列表
+     */
     public List<RefEmbeddingDto> listRefEmbeddings(String msgUuid) {
         List<ConversationMessageRefEmbedding> recordReferences = this.getBaseMapper().listByMsgUuid(msgUuid);
         if (CollectionUtils.isEmpty(recordReferences)) {

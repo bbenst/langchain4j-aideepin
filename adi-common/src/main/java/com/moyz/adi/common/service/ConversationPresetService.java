@@ -14,9 +14,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
+/**
+ * 预设对话管理服务。
+ */
 @Slf4j
 @Service
 public class ConversationPresetService extends ServiceImpl<ConversationPresetMapper, ConversationPreset> {
+    /**
+     * 分页查询预设对话。
+     *
+     * @param keyword     关键词
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 分页结果
+     */
     public Page<ConversationPreset> search(String keyword, int currentPage, int pageSize) {
         return this.lambdaQuery()
                 .eq(ConversationPreset::getIsDeleted, false)
@@ -25,6 +36,12 @@ public class ConversationPresetService extends ServiceImpl<ConversationPresetMap
                 .page(new Page<>(currentPage, pageSize));
     }
 
+    /**
+     * 新增预设对话。
+     *
+     * @param presetAddReq 新增请求
+     * @return 新增记录
+     */
     public ConversationPreset addOne(ConvPresetAddReq presetAddReq) {
         if (StringUtils.isAnyBlank(presetAddReq.getTitle(), presetAddReq.getRemark())) {
             throw new BaseException(ErrorEnum.A_PARAMS_ERROR);
@@ -38,6 +55,13 @@ public class ConversationPresetService extends ServiceImpl<ConversationPresetMap
         return newOne;
     }
 
+    /**
+     * 编辑预设对话。
+     *
+     * @param uuid    预设 UUID
+     * @param editReq 编辑请求
+     * @return 是否更新成功
+     */
     public boolean edit(String uuid, ConvPresetEditReq editReq) {
         if (StringUtils.isAnyBlank(uuid, editReq.getTitle(), editReq.getRemark())) {
             throw new BaseException(ErrorEnum.A_PARAMS_ERROR);
@@ -53,6 +77,12 @@ public class ConversationPresetService extends ServiceImpl<ConversationPresetMap
                 .update();
     }
 
+    /**
+     * 软删除预设对话。
+     *
+     * @param uuid 预设 UUID
+     * @return 是否删除成功
+     */
     public boolean softDel(String uuid) {
         if (Boolean.FALSE.equals(ThreadContext.getCurrentUser().getIsAdmin())) {
             throw new BaseException(ErrorEnum.A_USER_NOT_AUTH);

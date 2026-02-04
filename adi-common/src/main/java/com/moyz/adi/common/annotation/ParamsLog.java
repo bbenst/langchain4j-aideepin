@@ -6,7 +6,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 参数打印注解
+ * 参数打印注解。
  *
  * @author moyz
  * date:2021-07-15

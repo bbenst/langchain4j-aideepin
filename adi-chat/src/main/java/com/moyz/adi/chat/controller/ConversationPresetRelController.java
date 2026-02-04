@@ -13,15 +13,26 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-
+/**
+ * 预设会话与用户会话关联关系的接口控制器。
+ */
 @Tag(name = "预设对话与用户对话关联关系controller")
 @RequestMapping("/conversation-preset-rel")
 @RestController
 public class ConversationPresetRelController {
 
+    /**
+     * 预设会话关联服务，用于查询用户已使用的预设。
+     */
     @Resource
     private ConversationPresetRelService conversationPresetRelService;
 
+    /**
+     * 获取当前用户使用过的预设会话列表。
+     *
+     * @param limit 限制数量
+     * @return 预设会话关联列表
+     */
     @Operation(summary = "获取当前用户使用到的预设会话")
     @GetMapping("/mine")
     public List<ConvPresetRelDto> mine(@Parameter(description = "限制数量") @RequestParam(defaultValue = "100") Integer limit) {

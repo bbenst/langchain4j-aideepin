@@ -14,19 +14,25 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * 用户每日消耗统计服务。
+ */
 @Slf4j
 @Service
 public class UserDayCostService extends ServiceImpl<UserDayCostMapper, UserDayCost> {
 
+    /**
+     * 自身代理对象（用于触发异步方法）。
+     */
     @Lazy
     @Resource
     private UserDayCostService self;
 
     /**
-     * Append token cost
+     * 累加用户的 token 消耗。
      *
      * @param user   用户
-     * @param tokens The number of tokens
+     * @param tokens token 数量
      * @param isFree 消耗的是否免费额度
      */
     public void appendCostToUser(User user, int tokens, boolean isFree) {
@@ -50,6 +56,13 @@ public class UserDayCostService extends ServiceImpl<UserDayCostMapper, UserDayCo
         self.saveOrUpdate(saveOrUpdateInst);
     }
 
+    /**
+     * 统计用户当月与当日消耗。
+     *
+     * @param userId 用户 ID
+     * @param isFree 是否免费额度
+     * @return 消耗统计
+     */
     public CostStat costStatByUser(long userId, boolean isFree) {
         CostStat result = new CostStat();
 
@@ -76,6 +89,13 @@ public class UserDayCostService extends ServiceImpl<UserDayCostMapper, UserDayCo
         return result;
     }
 
+    /**
+     * 获取用户当天消耗记录。
+     *
+     * @param user   用户
+     * @param isFree 是否免费额度
+     * @return 消耗记录
+     */
     public UserDayCost getTodayCost(User user, boolean isFree) {
         return this.lambdaQuery()
                 .eq(UserDayCost::getUserId, user.getId())
@@ -84,11 +104,21 @@ public class UserDayCostService extends ServiceImpl<UserDayCostMapper, UserDayCo
                 .one();
     }
 
+    /**
+     * 统计当天总消耗。
+     *
+     * @return 总消耗
+     */
     public Integer sumTodayCost() {
         int today = LocalDateTimeUtil.getToday();
         return baseMapper.sumCostByDay(today).intValue();
     }
 
+    /**
+     * 统计当月总消耗。
+     *
+     * @return 总消耗
+     */
     public Integer sumCurrentMonthCost() {
         int start = LocalDateTimeUtil.getIntDay(LocalDateTime.now().withDayOfMonth(1));
         int end = LocalDateTimeUtil.getIntDay(LocalDateTime.now().plusMonths(1).withDayOfMonth(1).minusDays(1));

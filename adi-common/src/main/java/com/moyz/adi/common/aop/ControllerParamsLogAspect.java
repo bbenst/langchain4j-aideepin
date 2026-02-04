@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * 打印controller的请求参数
+ * 控制器请求参数日志切面。
  *
  * @author moyz
  * date:2021-07-15 03:16:59
@@ -18,16 +18,26 @@ import org.springframework.stereotype.Component;
 @Component
 public class ControllerParamsLogAspect {
 
+    /**
+     * 日志记录器。
+     */
     private static final Logger logger = LoggerFactory.getLogger(ControllerParamsLogAspect.class);
 
+    /**
+     * 控制器方法切点。
+     */
     @Pointcut("execution(public * com.adi.*.controller..*.*(..))")
     public void controllerMethods() {
     }
 
+    /**
+     * 方法执行前记录请求参数。
+     *
+     * @param joinPoint 连接点
+     */
     @Before("controllerMethods()")
     public void before(JoinPoint joinPoint) {
         ParamsLogAspect.paramsLog(joinPoint, logger);
     }
-
 
 }

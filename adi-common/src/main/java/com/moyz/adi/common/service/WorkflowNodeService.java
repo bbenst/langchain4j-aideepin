@@ -32,21 +32,42 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 工作流节点服务。
+ */
 @Slf4j
 @Service
 public class WorkflowNodeService extends ServiceImpl<WorkflowNodeMapper, WorkflowNode> {
 
+    /**
+     * 自身代理对象（用于触发事务方法）。
+     */
     @Lazy
     @Resource
     private WorkflowNodeService self;
 
+    /**
+     * 工作流组件服务。
+     */
     @Resource
     private WorkflowComponentService workflowComponentService;
 
+    /**
+     * 获取工作流的开始节点。
+     *
+     * @param workflowId 工作流 ID
+     * @return 开始节点
+     */
     public WorkflowNode getStartNode(long workflowId) {
         return baseMapper.getStartNode(workflowId);
     }
 
+    /**
+     * 查询工作流节点 DTO 列表。
+     *
+     * @param workflowId 工作流 ID
+     * @return 节点 DTO 列表
+     */
     public List<WfNodeDto> listDtoByWfId(long workflowId) {
         List<WorkflowNode> workflowNodeList = ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(WorkflowNode::getWorkflowId, workflowId)
@@ -59,6 +80,13 @@ public class WorkflowNodeService extends ServiceImpl<WorkflowNodeMapper, Workflo
         });
     }
 
+    /**
+     * 按 UUID 获取工作流节点。
+     *
+     * @param workflowId 工作流 ID
+     * @param uuid       节点 UUID
+     * @return 节点
+     */
     public WorkflowNode getByUuid(long workflowId, String uuid) {
         WorkflowNode node = ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(WorkflowNode::getWorkflowId, workflowId)
@@ -70,6 +98,12 @@ public class WorkflowNodeService extends ServiceImpl<WorkflowNodeMapper, Workflo
         return node;
     }
 
+    /**
+     * 查询工作流下的节点列表。
+     *
+     * @param workflowId 工作流 ID
+     * @return 节点列表
+     */
     public List<WorkflowNode> listByWorkflowId(Long workflowId) {
         List<WorkflowNode> list = ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(WorkflowNode::getWorkflowId, workflowId)
@@ -79,6 +113,13 @@ public class WorkflowNodeService extends ServiceImpl<WorkflowNodeMapper, Workflo
         return list;
     }
 
+    /**
+     * 复制工作流节点列表到目标工作流。
+     *
+     * @param workflowId       源工作流 ID
+     * @param targetWorkflowId 目标工作流 ID
+     * @return 复制后的节点列表
+     */
     public List<WorkflowNode> copyByWorkflowId(long workflowId, long targetWorkflowId) {
         List<WorkflowNode> result = new ArrayList<>();
         self.listByWorkflowId(workflowId).forEach(node -> {
@@ -87,6 +128,13 @@ public class WorkflowNodeService extends ServiceImpl<WorkflowNodeMapper, Workflo
         return result;
     }
 
+    /**
+     * 复制单个节点到目标工作流。
+     *
+     * @param targetWorkflowId 目标工作流 ID
+     * @param sourceNode       源节点
+     * @return 新节点
+     */
     public WorkflowNode copyNode(Long targetWorkflowId, WorkflowNode sourceNode) {
         WorkflowNode newNode = new WorkflowNode();
         BeanUtils.copyProperties(sourceNode, newNode, "id", "createTime", "updateTime");
@@ -101,6 +149,12 @@ public class WorkflowNodeService extends ServiceImpl<WorkflowNodeMapper, Workflo
                 .one();
     }
 
+    /**
+     * 创建或更新节点列表。
+     *
+     * @param workflowId 工作流 ID
+     * @param nodes      节点列表
+     */
     @Transactional
     public void createOrUpdateNodes(Long workflowId, List<WfNodeDto> nodes) {
         for (WfNodeDto node : nodes) {
@@ -125,6 +179,11 @@ public class WorkflowNodeService extends ServiceImpl<WorkflowNodeMapper, Workflo
         }
     }
 
+    /**
+     * 对节点配置进行加密处理（如有需要）。
+     *
+     * @param workflowNode 节点
+     */
     private void checkAndEncrypt(WorkflowNode workflowNode) {
         WorkflowComponent component = workflowComponentService.getAllEnable()
                 .stream()
@@ -148,6 +207,11 @@ public class WorkflowNodeService extends ServiceImpl<WorkflowNodeMapper, Workflo
         }
     }
 
+    /**
+     * 对节点配置进行解密处理（如有需要）。
+     *
+     * @param workflowNode 节点
+     */
     private void checkAndDecrypt(WorkflowNode workflowNode) {
         if (null == workflowNode) {
             log.warn("节点不存在");
@@ -175,6 +239,12 @@ public class WorkflowNodeService extends ServiceImpl<WorkflowNodeMapper, Workflo
         }
     }
 
+    /**
+     * 批量删除节点。
+     *
+     * @param workflowId 工作流 ID
+     * @param uuids      节点 UUID 列表
+     */
     @Transactional
     public void deleteNodes(Long workflowId, List<String> uuids) {
         if (CollectionUtils.isEmpty(uuids)) {
@@ -203,7 +273,7 @@ public class WorkflowNodeService extends ServiceImpl<WorkflowNodeMapper, Workflo
     }
 
     /**
-     * user_inputs:
+     * 用户输入示例：
      * [
      * {
      * "uuid": "12bc919774aa4e779d97e3dd9c836e11",

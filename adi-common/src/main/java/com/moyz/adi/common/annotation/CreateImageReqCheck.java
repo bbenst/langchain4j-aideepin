@@ -11,7 +11,9 @@ import java.lang.annotation.Target;
 import static java.lang.annotation.ElementType.*;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
-
+/**
+ * 绘图请求参数校验注解。
+ */
 @Constraint(validatedBy = {
         CreateImageReqValidator.class,
 })
@@ -19,9 +21,24 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Retention(RUNTIME)
 @Documented
 public @interface CreateImageReqCheck {
+    /**
+     * 校验失败时的提示信息。
+     *
+     * @return 提示信息
+     */
     String message() default "dddd";
 
+    /**
+     * 分组校验标识。
+     *
+     * @return 分组类型
+     */
     Class<?>[] groups() default {};
 
+    /**
+     * 负载信息。
+     *
+     * @return 负载类型
+     */
     Class<? extends Payload>[] payload() default {};
 }

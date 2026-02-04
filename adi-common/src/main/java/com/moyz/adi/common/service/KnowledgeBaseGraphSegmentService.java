@@ -5,6 +5,9 @@ import com.moyz.adi.common.entity.KnowledgeBaseGraphSegment;
 import com.moyz.adi.common.mapper.KnowledgeBaseGraphSegmentMapper;
 import org.springframework.stereotype.Service;
 
+/**
+ * 知识库图谱分段服务。
+ */
 @Service
 public class KnowledgeBaseGraphSegmentService extends ServiceImpl<KnowledgeBaseGraphSegmentMapper, KnowledgeBaseGraphSegment> {
 

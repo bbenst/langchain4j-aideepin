@@ -20,25 +20,42 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * pgvector的相关配置
+ * PgVector 向量库配置。
  */
 @Slf4j
 @Configuration
 @ConditionalOnProperty(value = "adi.vector-database", havingValue = "pgvector")
 public class PgVectorEmbeddingStoreConfig {
 
+    /**
+     * 数据库连接地址。
+     */
     @Value("${spring.datasource.url}")
     private String dataBaseUrl;
 
+    /**
+     * 数据库用户名。
+     */
     @Value("${spring.datasource.username}")
     private String dataBaseUserName;
 
+    /**
+     * 数据库密码。
+     */
     @Value("${spring.datasource.password}")
     private String dataBasePassword;
 
+    /**
+     * 应用配置属性。
+     */
     @Resource
     private AdiProperties adiProperties;
 
+    /**
+     * 知识库向量库。
+     *
+     * @return EmbeddingStore 实例
+     */
     @Bean(name = "kbEmbeddingStore")
     @Primary
     public EmbeddingStore<TextSegment> initKbEmbeddingStore() {
@@ -52,9 +69,9 @@ public class PgVectorEmbeddingStoreConfig {
     }
 
     /**
-     * 角色记忆使用的向量库
+     * 角色记忆使用的向量库。
      *
-     * @return EmbeddingStore实例
+     * @return EmbeddingStore 实例
      */
     @Bean(name = "convMemoryEmbeddingStore")
     public EmbeddingStore<TextSegment> initConvMemoryEmbeddingStore() {
@@ -67,6 +84,11 @@ public class PgVectorEmbeddingStoreConfig {
         return createEmbeddingStore(tableName, pair.getRight());
     }
 
+    /**
+     * AI 搜索向量库。
+     *
+     * @return EmbeddingStore 实例
+     */
     @Bean(name = "searchEmbeddingStore")
     public EmbeddingStore<TextSegment> initSearchEmbeddingStore() {
         log.info("Initializing searchEmbeddingStore...");
@@ -78,8 +100,15 @@ public class PgVectorEmbeddingStoreConfig {
         return createEmbeddingStore(tableName, pair.getRight());
     }
 
+    /**
+     * 构建 PgVector 向量库实例。
+     *
+     * @param tableName 表名
+     * @param dimension 向量维度
+     * @return 向量库实例
+     */
     private EmbeddingStore<TextSegment> createEmbeddingStore(String tableName, int dimension) {
-        // 正则表达式匹配
+        // 通过正则解析 JDBC 连接字符串，提取主机、端口和数据库名
         String regex = "jdbc:postgresql://([^:/]+):(\\d+)/(\\w+).+";
         Pattern pattern = Pattern.compile(regex);
         Matcher matcher = pattern.matcher(dataBaseUrl);

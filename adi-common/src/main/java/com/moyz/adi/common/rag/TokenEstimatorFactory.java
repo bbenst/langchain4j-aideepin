@@ -11,9 +11,18 @@ import dev.langchain4j.model.openai.OpenAiTokenCountEstimator;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 
+/**
+ * Token 估算器工厂，根据配置选择合适实现。
+ */
 @Slf4j
 public class TokenEstimatorFactory {
 
+    /**
+     * 创建 token 估算器。
+     *
+     * @param tokenEstimator 估算器名称
+     * @return 估算器实现
+     */
     public static TokenCountEstimator create(String tokenEstimator) {
         if (StringUtils.isBlank(tokenEstimator)) {
             return new OpenAiTokenCountEstimator(OpenAiChatModelName.GPT_3_5_TURBO);

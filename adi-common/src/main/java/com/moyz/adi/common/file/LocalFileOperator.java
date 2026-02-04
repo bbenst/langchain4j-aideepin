@@ -25,29 +25,44 @@ import java.nio.file.Paths;
 import static com.moyz.adi.common.cosntant.AdiConstant.POI_DOC_TYPES;
 import static com.moyz.adi.common.cosntant.AdiConstant.URL_PREFIX_FILE;
 import static com.moyz.adi.common.enums.ErrorEnum.*;
-
+/**
+ * 本地文件操作器。
+ */
 @Slf4j
 public class LocalFileOperator implements IFileOperator {
-
+    /**
+     * 图片存储路径。
+     */
     public static String imagePath;
-
+    /**
+     * 文件存储路径。
+     */
     public static String filePath;
+    /**
+     * 检查文件是否存在。
+     */
 
     @Override
     public boolean checkIfExist(AdiFile adiFile) {
         return LocalFileUtil.checkIfExist(adiFile.getPath());
     }
-
+    /**
+     * 保存文件并返回路径与后缀。
+     */
     @Override
     public Pair<String, String> save(MultipartFile file, boolean image, String uuid) {
         return LocalFileUtil.saveToLocal(file, image ? imagePath : filePath, uuid);
     }
-
+    /**
+     * 保存字节数组并返回路径与后缀。
+     */
     @Override
     public Pair<String, String> save(byte[] file, boolean image, String name) {
         return LocalFileUtil.saveToLocal(file, image ? imagePath : filePath, name);
     }
-
+    /**
+     * 通过远程 URL 保存图片。
+     */
     @Override
     public SaveRemoteImageResult saveImageFromUrl(String imageUrl, String uuid) {
         String ext = LocalFileUtil.getFileExtension(imageUrl);
@@ -65,7 +80,9 @@ public class LocalFileOperator implements IFileOperator {
         }
         return SaveRemoteImageResult.builder().ext(ext).originalName(target.getName()).pathOrUrl(filePath).build();
     }
-
+    /**
+     * 删除文件。
+     */
     @Override
     public void delete(AdiFile adiFile) {
         if (StringUtils.isBlank(adiFile.getPath())) {
@@ -81,12 +98,16 @@ public class LocalFileOperator implements IFileOperator {
             throw new BaseException(B_DELETE_FILE_ERROR);
         }
     }
-
+    /**
+     * 获取文件访问 URL。
+     */
     @Override
     public String getFileUrl(AdiFile adiFile) {
         return URL_PREFIX_FILE + adiFile.getUuid() + "." + adiFile.getExt();
     }
-
+    /**
+     * 加载文档内容。
+     */
     @Override
     public Document loadDocument(AdiFile adiFile) {
         Document result = null;
@@ -101,17 +122,23 @@ public class LocalFileOperator implements IFileOperator {
         }
         return result;
     }
-
+    /**
+     * 初始化本地存储路径。
+     */
     public static void init(String imagePath, String filePath) {
         LocalFileOperator.imagePath = imagePath;
         LocalFileOperator.filePath = filePath;
     }
-
+    /**
+     * 检查路径是否存在。
+     */
     public static boolean checkIfExist(String filePath) {
         Path path = Paths.get(filePath);
         return Files.exists(path);
     }
-
+    /**
+     * 检查并创建目录。
+     */
     public static boolean checkAndCreateDir(String dir) {
         Path dirPath = Paths.get(dir);
         if (!Files.exists(dirPath)) {

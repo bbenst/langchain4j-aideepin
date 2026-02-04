@@ -17,11 +17,17 @@ import org.springframework.context.annotation.DependsOn;
 import org.springframework.context.annotation.Primary;
 
 
+/**
+ * Neo4j 向量库配置。
+ */
 @Slf4j
 @Configuration
 @ConditionalOnProperty(value = "adi.vector-database", havingValue = "neo4j")
 public class Neo4jEmbeddingStoreConfig {
 
+    /**
+     * 应用配置属性。
+     */
     @Resource
     private AdiProperties adiProperties;
 
@@ -69,6 +75,11 @@ public class Neo4jEmbeddingStoreConfig {
         return createEmbeddingStore(indexName, tableName, pair.getRight());
     }
 
+    /**
+     * AI 搜索向量库。
+     *
+     * @return EmbeddingStore 实例
+     */
     @Bean(name = "searchEmbeddingStore")
     @DependsOn("initializer")
     public EmbeddingStore<TextSegment> initSearchEmbeddingStore() {
@@ -83,6 +94,14 @@ public class Neo4jEmbeddingStoreConfig {
         return createEmbeddingStore(indexName, tableName, pair.getRight());
     }
 
+    /**
+     * 构建 Neo4j 向量库实例。
+     *
+     * @param indexName 索引名称
+     * @param tableName 标签名称
+     * @param dimension 向量维度
+     * @return 向量库实例
+     */
     private EmbeddingStore<TextSegment> createEmbeddingStore(String indexName, String tableName, int dimension) {
         log.info("Creating Neo4jEmbeddingStore with table name:{},dimension:{}", tableName, dimension);
         AdiProperties.Neo4j neo4j = adiProperties.getDatasource().getNeo4j();

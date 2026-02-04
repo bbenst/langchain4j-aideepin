@@ -14,12 +14,26 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 知识库图谱查询服务。
+ */
 @Service
 public class KnowledgeBaseGraphService {
 
+    /**
+     * 知识库图谱存储。
+     */
     @Resource
     private GraphStore kbGraphStore;
 
+    /**
+     * 按知识库 UUID 查询图谱顶点。
+     *
+     * @param kbUuid 知识库 UUID
+     * @param maxId  最大 ID
+     * @param limit  查询数量
+     * @return 顶点列表
+     */
     public List<GraphVertex> listVerticesByKbUuid(String kbUuid, long maxId, int limit) {
         Filter filter = new IsEqualTo(AdiConstant.MetadataKey.KB_UUID, kbUuid);
         return kbGraphStore.searchVertices(GraphVertexSearch.builder()
@@ -29,6 +43,14 @@ public class KnowledgeBaseGraphService {
                 .build());
     }
 
+    /**
+     * 按知识点 UUID 查询图谱顶点。
+     *
+     * @param kbItemUuid 知识点 UUID
+     * @param maxId      最大 ID
+     * @param limit      查询数量
+     * @return 顶点列表
+     */
     public List<GraphVertex> listVerticesByKbItemUuid(String kbItemUuid, long maxId, int limit) {
         Filter filter = new IsEqualTo(AdiConstant.MetadataKey.KB_ITEM_UUID, kbItemUuid);
         return kbGraphStore.searchVertices(
@@ -40,6 +62,14 @@ public class KnowledgeBaseGraphService {
         );
     }
 
+    /**
+     * 按知识库 UUID 查询图谱边。
+     *
+     * @param kbUuid 知识库 UUID
+     * @param maxId  最大 ID
+     * @param limit  查询数量
+     * @return 边列表（含起止点）
+     */
     public List<Triple<GraphVertex, GraphEdge, GraphVertex>> listEdgesByKbUuid(String kbUuid, long maxId, int limit) {
         Filter filter = new IsEqualTo(AdiConstant.MetadataKey.KB_UUID, kbUuid);
         return kbGraphStore.searchEdges(GraphEdgeSearch.builder()
@@ -49,6 +79,14 @@ public class KnowledgeBaseGraphService {
                 .build());
     }
 
+    /**
+     * 按知识点 UUID 查询图谱边。
+     *
+     * @param kbItemUuid 知识点 UUID
+     * @param maxId      最大 ID
+     * @param limit      查询数量
+     * @return 边列表（含起止点）
+     */
     public List<Triple<GraphVertex, GraphEdge, GraphVertex>> listEdgesByKbItemUuid(String kbItemUuid, long maxId, int limit) {
         Filter filter = new IsEqualTo(AdiConstant.MetadataKey.KB_ITEM_UUID, kbItemUuid);
         return kbGraphStore.searchEdges(GraphEdgeSearch.builder()
@@ -58,6 +96,12 @@ public class KnowledgeBaseGraphService {
                 .build());
     }
 
+    /**
+     * 从三元组结果中拆分出顶点与边列表。
+     *
+     * @param triples 三元组列表
+     * @return 顶点列表与边列表
+     */
     public Pair<List<GraphVertex>, List<GraphEdge>> getFromTriple(List<Triple<GraphVertex, GraphEdge, GraphVertex>> triples) {
         List<GraphVertex> vertices = new ArrayList<>();
         List<GraphEdge> edges = new ArrayList<>();

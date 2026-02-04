@@ -25,11 +25,15 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import static com.moyz.adi.common.enums.ErrorEnum.*;
-
+/**
+ * 本地文件工具类。
+ */
 @Slf4j
 public class LocalFileUtil {
 
     /**
+     * 保存 MultipartFile 到本地。
+     *
      * @param file    文件
      * @param dir     存放目录
      * @param newName 文件名（包括后缀）
@@ -55,6 +59,8 @@ public class LocalFileUtil {
     }
 
     /**
+     * 保存字节数组到本地。
+     *
      * @param file     文件
      * @param dir      存放目录
      * @param fileName 文件名
@@ -78,7 +84,7 @@ public class LocalFileUtil {
     }
 
     /**
-     * 读取图片到BufferedImage
+     * 读取图片到 BufferedImage。
      *
      * @param adiFile        图片实体类
      * @param thumbnail      读取的是缩略图
@@ -90,7 +96,7 @@ public class LocalFileUtil {
             String currentFilePath = adiFile.getPath();
             if (thumbnail) {
                 currentFilePath = thumbnailsPath + adiFile.getUuid() + "." + adiFile.getExt();
-                //不存在则创建
+                // 缩略图不存在则创建
                 if (new File(adiFile.getPath()).exists() && !new File(currentFilePath).exists()) {
                     ImgUtil.scale(
                             cn.hutool.core.io.FileUtil.file(adiFile.getPath()),
@@ -105,7 +111,12 @@ public class LocalFileUtil {
             throw new BaseException(B_IO_EXCEPTION);
         }
     }
-
+    /**
+     * 读取文件为字节数组。
+     *
+     * @param localPath 本地路径
+     * @return 字节数组
+     */
     public static byte[] readBytes(String localPath) {
         try {
             return FileUtils.readFileToByteArray(new File(localPath));
@@ -116,7 +127,12 @@ public class LocalFileUtil {
             throw new RuntimeException(e);
         }
     }
-
+    /**
+     * 获取文件扩展名。
+     *
+     * @param fileName 文件名或 URL
+     * @return 扩展名
+     */
     public static String getFileExtension(String fileName) {
         try {
             int dotIndex = fileName.lastIndexOf(".");
@@ -140,7 +156,12 @@ public class LocalFileUtil {
         }
         return "";
     }
-
+    /**
+     * 获取文件名与扩展名。
+     *
+     * @param pathOrUrl 路径或 URL
+     * @return 名称与扩展名
+     */
     public static Pair<String, String> getNameAndExt(String pathOrUrl) {
         int idx = pathOrUrl.lastIndexOf("/");
         if (idx == -1) {
@@ -149,14 +170,21 @@ public class LocalFileUtil {
         String name = pathOrUrl.substring(idx + 1);
         return Pair.of(name, getFileExtension(name));
     }
-
+    /**
+     * 检查路径是否存在。
+     *
+     * @param filePath 文件路径
+     * @return 是否存在
+     */
     public static boolean checkIfExist(String filePath) {
         Path path = Paths.get(filePath);
         return Files.exists(path);
     }
 
     /**
-     * @param fileUrl     文件url
+     * 从 URL 保存文件到本地。
+     *
+     * @param fileUrl     文件 URL
      * @param newFileName 文件名（不带后缀时解析 fileUrl 得出后缀）
      * @param defaultExt  默认后缀
      * @return 文件路径
@@ -182,7 +210,12 @@ public class LocalFileUtil {
         }
         return filePath;
     }
-
+    /**
+     * 获取音频文件信息。
+     *
+     * @param path 音频文件路径
+     * @return 音频信息
+     */
     public static MultimediaInfo getAudioFileInfo(String path) {
         try {
             File file = new File(path);

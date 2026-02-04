@@ -6,15 +6,26 @@ import com.moyz.adi.common.cosntant.AdiConstant;
 import com.moyz.adi.common.entity.AiModel;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
-
+/**
+ * 配置参数解析工具类。
+ */
 @Slf4j
 public class AdiPropertiesUtil {
-
+    /**
+     * 向量表后缀缓存。
+     */
     public static String EMBEDDING_TABLE_SUFFIX = "";
-
+    /**
+     * 工具类禁止实例化。
+     */
     private AdiPropertiesUtil() {
     }
-
+    /**
+     * 获取向量表后缀与向量维度。
+     *
+     * @param adiProperties 系统配置
+     * @return 后缀与维度
+     */
     public static Pair<String, Integer> getSuffixAndDimension(AdiProperties adiProperties) {
         String suffix = "";
         int dimension = 384;
@@ -41,7 +52,12 @@ public class AdiPropertiesUtil {
         log.info("getSuffixAndDimension:{}", tableSuffixAndDimension);
         return tableSuffixAndDimension;
     }
-
+    /**
+     * 根据配置解析向量模型。
+     *
+     * @param adiProperties 系统配置
+     * @return 向量模型
+     */
     public static AiModel getEmbeddingModelByProperty(AdiProperties adiProperties) {
         String[] platformAndModel = adiProperties.getEmbeddingModel().split(":");
         String platform = platformAndModel[0];

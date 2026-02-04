@@ -20,15 +20,32 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 提示词管理服务。
+ */
 @Slf4j
 @Service
 public class PromptService extends ServiceImpl<PromptMapper, Prompt> {
 
+    /**
+     * 获取用户全部提示词。
+     *
+     * @param userId 用户 ID
+     * @return 提示词列表
+     */
     public List<PromptDto> getAll(long userId) {
         List<Prompt> prompts = this.lambdaQuery().eq(Prompt::getUserId, userId).eq(Prompt::getIsDeleted, false).list();
         return MPPageUtil.convertToList(prompts, PromptDto.class);
     }
 
+    /**
+     * 分页搜索提示词。
+     *
+     * @param keyword     关键词
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 分页结果
+     */
     public Page<PromptDto> search(String keyword, int currentPage, int pageSize) {
         Page<Prompt> promptPage;
         if (StringUtils.isNotBlank(keyword)) {
@@ -46,6 +63,12 @@ public class PromptService extends ServiceImpl<PromptMapper, Prompt> {
         return MPPageUtil.convertToPage(promptPage, new Page<>(), PromptDto.class);
     }
 
+    /**
+     * 自动补全提示词列表。
+     *
+     * @param keyword 关键词
+     * @return 提示词列表
+     */
     public List<PromptDto> autocomplete(String keyword) {
         List<Prompt> promptPage;
         if (StringUtils.isNotBlank(keyword)) {
@@ -65,6 +88,12 @@ public class PromptService extends ServiceImpl<PromptMapper, Prompt> {
         return MPPageUtil.convertToList(promptPage, PromptDto.class);
     }
 
+    /**
+     * 查询指定更新时间之后的提示词列表。
+     *
+     * @param minUpdateTime 最小更新时间
+     * @return 列表响应
+     */
     public PromptListResp listByMinUpdateTime(LocalDateTime minUpdateTime) {
         LocalDateTime tmpUpdatTime = minUpdateTime;
         if (null == tmpUpdatTime) {
@@ -94,6 +123,12 @@ public class PromptService extends ServiceImpl<PromptMapper, Prompt> {
         return resp;
     }
 
+    /**
+     * 批量保存提示词。
+     *
+     * @param savePromptsReq 保存请求
+     * @return 标题到 ID 的映射
+     */
     public Map<String, Long> savePrompts(PromptsSaveReq savePromptsReq) {
         Map<String, Long> titleToId = new HashMap<>();
 
@@ -109,7 +144,7 @@ public class PromptService extends ServiceImpl<PromptMapper, Prompt> {
                     .eq(Prompt::getIsDeleted, false)
                     .one();
             if (null != existOne) {
-                //modify
+                // 更新已有记录
                 prompt.setId(existOne.getId());
                 prompt.setUserId(userId);
                 prompt.setAct(title);
@@ -117,7 +152,7 @@ public class PromptService extends ServiceImpl<PromptMapper, Prompt> {
                 this.updateById(prompt);
                 titleToId.put(title, existOne.getId());
             } else {
-                //create
+                // 新建记录
                 prompt.setUserId(userId);
                 prompt.setAct(title);
                 prompt.setPrompt(promptDto.getPrompt());
@@ -133,6 +168,12 @@ public class PromptService extends ServiceImpl<PromptMapper, Prompt> {
         return titleToId;
     }
 
+    /**
+     * 软删除提示词。
+     *
+     * @param id 提示词 ID
+     * @return 是否删除成功
+     */
     public boolean softDelete(Long id) {
         Prompt prompt = this.lambdaQuery()
                 .eq(Prompt::getUserId, ThreadContext.getCurrentUserId())
@@ -148,6 +189,14 @@ public class PromptService extends ServiceImpl<PromptMapper, Prompt> {
         return this.updateById(updateOne);
     }
 
+    /**
+     * 编辑提示词。
+     *
+     * @param id     提示词 ID
+     * @param title  标题
+     * @param remark 内容
+     * @return 是否更新成功
+     */
     public boolean edit(Long id, String title, String remark) {
         Prompt prompt = this.lambdaQuery()
                 .eq(Prompt::getId, id)
@@ -164,6 +213,12 @@ public class PromptService extends ServiceImpl<PromptMapper, Prompt> {
         return this.updateById(updateOne);
     }
 
+    /**
+     * 搜索提示词（最多 10 条）。
+     *
+     * @param keyword 关键词
+     * @return 提示词列表
+     */
     public List<PromptDto> search(String keyword) {
         List<Prompt> prompts = this.lambdaQuery()
                 .eq(Prompt::getUserId, ThreadContext.getCurrentUserId())

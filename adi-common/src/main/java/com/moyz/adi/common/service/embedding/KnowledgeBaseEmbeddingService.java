@@ -15,11 +15,20 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * 知识库向量存储服务（PGVector）。
+ */
 @Slf4j
 @Service
 @ConditionalOnProperty(value = "adi.vector-database", havingValue = "pgvector")
 public class KnowledgeBaseEmbeddingService extends ServiceImpl<KnowledgeBaseEmbeddingMapper, KnowledgeBaseEmbedding> implements IEmbeddingService {
 
+    /**
+     * 根据向量 ID 列表查询向量内容。
+     *
+     * @param embeddingIds 向量 ID 列表
+     * @return 向量 DTO 列表
+     */
     @Override
     public List<KbItemEmbeddingDto> listByEmbeddingIds(List<String> embeddingIds) {
         LambdaQueryWrapper<KnowledgeBaseEmbedding> lambdaQueryWrapper = new LambdaQueryWrapper<>();
@@ -31,6 +40,14 @@ public class KnowledgeBaseEmbeddingService extends ServiceImpl<KnowledgeBaseEmbe
         });
     }
 
+    /**
+     * 根据知识点 UUID 分页查询向量。
+     *
+     * @param kbItemUuid  知识点 UUID
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 分页结果
+     */
     @Override
     public Page<KbItemEmbeddingDto> listByItemUuid(String kbItemUuid, int currentPage, int pageSize) {
         Page<KnowledgeBaseEmbedding> sourcePage = baseMapper.selectByItemUuid(new Page<>(currentPage, pageSize), kbItemUuid, AdiPropertiesUtil.EMBEDDING_TABLE_SUFFIX);
@@ -43,16 +60,22 @@ public class KnowledgeBaseEmbeddingService extends ServiceImpl<KnowledgeBaseEmbe
     }
 
     /**
-     * 删除{kbItemUuid}这个知识库条目的向量
+     * 删除指定知识点的向量。
      *
-     * @param kbItemUuid 知识库条目uuid
-     * @return
+     * @param kbItemUuid 知识点 UUID
+     * @return 是否删除成功
      */
     @Override
     public boolean deleteByItemUuid(String kbItemUuid) {
         return baseMapper.deleteByItemUuid(kbItemUuid, AdiPropertiesUtil.EMBEDDING_TABLE_SUFFIX);
     }
 
+    /**
+     * 统计知识库下的向量数量。
+     *
+     * @param kbUuid 知识库 UUID
+     * @return 数量
+     */
     @Override
     public Integer countByKbUuid(String kbUuid) {
         return baseMapper.countByKbUuid(kbUuid, AdiPropertiesUtil.EMBEDDING_TABLE_SUFFIX);

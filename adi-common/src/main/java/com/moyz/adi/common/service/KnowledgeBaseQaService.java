@@ -26,19 +26,38 @@ import java.util.Map;
 import static com.moyz.adi.common.enums.ErrorEnum.A_DATA_NOT_FOUND;
 import static com.moyz.adi.common.util.LocalCache.MODEL_ID_TO_OBJ;
 
+/**
+ * 知识库问答记录服务。
+ */
 @Slf4j
 @Service
 public class KnowledgeBaseQaService extends ServiceImpl<KnowledgeBaseQaRecordMapper, KnowledgeBaseQa> {
 
+    /**
+     * 向量引用记录服务。
+     */
     @Resource
     private KnowledgeBaseQaRecordReferenceService knowledgeBaseQaRecordReferenceService;
 
+    /**
+     * 图谱引用记录服务。
+     */
     @Resource
     private KnowledgeBaseQaRefGraphService knowledgeBaseQaRecordRefGraphService;
 
+    /**
+     * 模型服务。
+     */
     @Resource
     private AiModelService aiModelService;
 
+    /**
+     * 新增问答记录。
+     *
+     * @param knowledgeBase 知识库
+     * @param req           记录请求
+     * @return 记录 DTO
+     */
     public KbQaDto add(KnowledgeBase knowledgeBase, QARecordReq req) {
         KnowledgeBaseQa newRecord = new KnowledgeBaseQa();
         newRecord.setAiModelId(aiModelService.getIdByName(req.getModelName()));
@@ -54,6 +73,15 @@ public class KnowledgeBaseQaService extends ServiceImpl<KnowledgeBaseQaRecordMap
         return result;
     }
 
+    /**
+     * 分页查询问答记录。
+     *
+     * @param kbUuid      知识库 UUID
+     * @param keyword     关键词
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 分页结果
+     */
     public Page<KbQaDto> search(String kbUuid, String keyword, Integer currentPage, Integer pageSize) {
         LambdaQueryWrapper<KnowledgeBaseQa> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(KnowledgeBaseQa::getKbUuid, kbUuid);
@@ -77,11 +105,11 @@ public class KnowledgeBaseQaService extends ServiceImpl<KnowledgeBaseQaRecordMap
     }
 
     /**
-     * 增加嵌入引用记录
+     * 增加嵌入引用记录。
      *
-     * @param user
-     * @param qaRecordId       qa记录id
-     * @param embeddingToScore
+     * @param user             用户
+     * @param qaRecordId       记录 ID
+     * @param embeddingToScore 向量与分数映射
      */
     public void createEmbeddingRefs(User user, Long qaRecordId, Map<String, Double> embeddingToScore) {
         log.info("更新向量引用,userId:{},qaRecordId:{},embeddingToScore.size:{}", user.getId(), qaRecordId, embeddingToScore.size());
@@ -97,11 +125,11 @@ public class KnowledgeBaseQaService extends ServiceImpl<KnowledgeBaseQaRecordMap
     }
 
     /**
-     * 增加图谱引用记录
+     * 增加图谱引用记录。
      *
-     * @param user
-     * @param qaRecordId
-     * @param graphDto
+     * @param user      用户
+     * @param qaRecordId 记录 ID
+     * @param graphDto  图谱引用
      */
     public void createGraphRefs(User user, Long qaRecordId, RefGraphDto graphDto) {
         log.info("更新图谱引用,userId:{},qaRecordId:{},vertices.Size:{},edges.size:{}", user.getId(), qaRecordId, graphDto.getVertices().size(), graphDto.getEdges().size());
@@ -117,6 +145,12 @@ public class KnowledgeBaseQaService extends ServiceImpl<KnowledgeBaseQaRecordMap
         knowledgeBaseQaRecordRefGraphService.save(refGraph);
     }
 
+    /**
+     * 获取问答记录，不存在则抛异常。
+     *
+     * @param uuid 记录 UUID
+     * @return 记录实体
+     */
     public KnowledgeBaseQa getOrThrow(String uuid) {
         KnowledgeBaseQa exist = ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(KnowledgeBaseQa::getUuid, uuid)
@@ -128,6 +162,9 @@ public class KnowledgeBaseQaService extends ServiceImpl<KnowledgeBaseQaRecordMap
         return exist;
     }
 
+    /**
+     * 清理当前用户的问答记录。
+     */
     public void clearByCurrentUser() {
         ChainWrappers.lambdaUpdateChain(baseMapper)
                 .eq(KnowledgeBaseQa::getUserId, ThreadContext.getCurrentUserId())
@@ -135,6 +172,12 @@ public class KnowledgeBaseQaService extends ServiceImpl<KnowledgeBaseQaRecordMap
                 .update();
     }
 
+    /**
+     * 软删除问答记录。
+     *
+     * @param uuid 记录 UUID
+     * @return 是否删除成功
+     */
     public boolean softDelete(String uuid) {
         if (Boolean.TRUE.equals(ThreadContext.getCurrentUser().getIsAdmin())) {
             return ChainWrappers.lambdaUpdateChain(baseMapper)

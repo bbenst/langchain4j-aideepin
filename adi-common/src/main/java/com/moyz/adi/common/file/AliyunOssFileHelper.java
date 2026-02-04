@@ -21,15 +21,28 @@ import java.io.InputStream;
 import java.util.List;
 
 import static com.moyz.adi.common.cosntant.AdiConstant.STORAGE_LOCATION_VALUE_ALI_OSS;
-
+/**
+ * 阿里云 OSS 文件辅助类。
+ */
 @Slf4j
 @Service
 public class AliyunOssFileHelper {
-
+    /**
+     * OSS 客户端。
+     */
     private OSS client = null;
+    /**
+     * OSS 配置对象。
+     */
     @Getter
     private AliOssConfig configObj = null;
+    /**
+     * 配置字符串缓存。
+     */
     private String configStr = "";
+    /**
+     * 初始化 OSS 客户端。
+     */
 
     public void init() {
         String aliStorageConfigKey = AdiConstant.SysConfigKey.STORAGE_LOCATION_ALI_OSS;
@@ -60,11 +73,18 @@ public class AliyunOssFileHelper {
         configObj = newConfigObj;
         client = new OSSClientBuilder().build(configObj.getEndpoint(), configObj.getAccessKeyId(), configObj.getAccessKeySecret());
     }
-
+    /**
+     * 重新加载配置并初始化客户端。
+     */
     public void reload() {
         init();
     }
-
+    /**
+     * 保存对象到 OSS。
+     *
+     * @param bytes 文件内容
+     * @param name 对象名称
+     */
     public void saveObj(byte[] bytes, String name) {
         InputStream is = new ByteArrayInputStream(bytes);
         PutObjectResult putObjectResult = client.putObject(configObj.getBucketName(), name, is);
@@ -72,7 +92,11 @@ public class AliyunOssFileHelper {
             log.info("Ali oss put object:{}", putObjectResult.getETag());
         }
     }
-
+    /**
+     * 批量删除对象。
+     *
+     * @param objectNames 对象名称列表
+     */
     public void deleteObjs(List<String> objectNames) {
         DeleteObjectsResult deleteObjectsResult = client.deleteObjects(new DeleteObjectsRequest(configObj.getBucketName()).withKeys(objectNames));
         List<String> deletedObjects = deleteObjectsResult.getDeletedObjects();
@@ -80,16 +104,21 @@ public class AliyunOssFileHelper {
             log.warn("Object {} deleted", object);
         }
     }
-
+    /**
+     * 判断对象是否存在。
+     *
+     * @param objectName 对象名称
+     * @return 是否存在
+     */
     public boolean doesObjectExist(String objectName) {
         return client.doesObjectExist(configObj.getBucketName(), objectName);
     }
 
     /**
-     * 获取完整访问路径 | Get the full access URL
+     * 获取完整访问路径。
      *
-     * @param objectName 对象名称 | Object name
-     * @return 完整访问路径 | Full access URL
+     * @param objectName 对象名称
+     * @return 完整访问路径
      */
     public String getUrl(String objectName) {
         return "https://" + configObj.getBucketName() + "." + configObj.getEndpoint() + "/" + objectName;

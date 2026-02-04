@@ -32,13 +32,28 @@ import org.neo4j.cypherdsl.core.Node;
 import org.neo4j.driver.internal.value.ListValue;
 import org.neo4j.driver.internal.value.PointValue;
 
+/**
+ * Neo4j 过滤条件转换器，将过滤表达式转为 Cypher 条件。
+ */
 @Internal
 class AdiNeo4jFilterMapper {
 
+    /**
+     * JSON 序列化器。
+     */
     static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    /**
+     * 不支持的过滤类型提示。
+     */
     static final String UNSUPPORTED_FILTER_TYPE_ERROR = "Unsupported filter type: ";
 
+    /**
+     * 将 PointValue 转为 Cypher 点表达式。
+     *
+     * @param value1 点值
+     * @return 点表达式
+     */
     private static FunctionInvocation convertToPoint(PointValue value1) {
         try {
             String s = OBJECT_MAPPER.writeValueAsString(value1.asObject());
@@ -50,8 +65,11 @@ class AdiNeo4jFilterMapper {
     }
 
     /**
-     * The {@link Cypher#literalOf(Object)} doesn't handle all data types,
-     * so we use this method to transform non-managed data
+     * {@link Cypher#literalOf(Object)} 不支持所有数据类型，
+     * 这里对特殊类型进行转换。
+     *
+     * @param value 原始值
+     * @return Cypher 表达式
      */
     static Expression toCypherLiteral(Object value) {
         if (value instanceof OffsetDateTime) {
@@ -71,12 +89,26 @@ class AdiNeo4jFilterMapper {
         return literalOf(value);
     }
 
+    /**
+     * 当前操作的节点。
+     */
     private final Node node;
 
+    /**
+     * 构建过滤器映射器。
+     *
+     * @param node 节点
+     */
     AdiNeo4jFilterMapper(Node node) {
         this.node = node;
     }
 
+    /**
+     * 根据过滤器构建 Cypher 条件。
+     *
+     * @param filter 过滤器
+     * @return 条件表达式
+     */
     Condition getCondition(Filter filter) {
         if (filter instanceof IsEqualTo item) {
             Expression cypherLiteral = toCypherLiteral(item.key());
@@ -118,12 +150,24 @@ class AdiNeo4jFilterMapper {
         }
     }
 
+    /**
+     * 构建 IN 条件。
+     *
+     * @param filter IN 过滤器
+     * @return 条件表达式
+     */
     Condition mapIn(IsIn filter) {
         Expression cypherLiteral = toCypherLiteral(filter.key());
         Expression cypherLiteral1 = toCypherLiteral(filter.comparisonValues());
         return Cypher.includesAny(node.property(cypherLiteral), cypherLiteral1);
     }
 
+    /**
+     * 构建 NOT IN 条件。
+     *
+     * @param filter NOT IN 过滤器
+     * @return 条件表达式
+     */
     Condition mapNotIn(IsNotIn filter) {
         Expression cypherLiteral = toCypherLiteral(filter.key());
         Expression cypherLiteral1 = toCypherLiteral(filter.comparisonValues());
@@ -131,18 +175,36 @@ class AdiNeo4jFilterMapper {
         return not(condition1);
     }
 
+    /**
+     * 构建 AND 条件。
+     *
+     * @param filter AND 过滤器
+     * @return 条件表达式
+     */
     private Condition mapAnd(And filter) {
         Condition left = getCondition(filter.left());
         Condition right = getCondition(filter.right());
         return left.and(right);
     }
 
+    /**
+     * 构建 OR 条件。
+     *
+     * @param filter OR 过滤器
+     * @return 条件表达式
+     */
     private Condition mapOr(Or filter) {
         Condition left = getCondition(filter.left());
         Condition right = getCondition(filter.right());
         return left.or(right);
     }
 
+    /**
+     * 构建 NOT 条件。
+     *
+     * @param filter NOT 过滤器
+     * @return 条件表达式
+     */
     private Condition mapNot(Not filter) {
         Condition expression = getCondition(filter.expression());
         return not(expression);

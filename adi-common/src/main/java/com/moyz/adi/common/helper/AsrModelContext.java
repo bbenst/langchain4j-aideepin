@@ -14,14 +14,18 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Automatic Speech Recognition (ASR) context class.
+ * 语音识别（ASR）模型上下文。
  */
 @Slf4j
 public class AsrModelContext {
 
-    //ModelName to ASR service mapping
+    /**
+     * 模型名称到 ASR 服务的映射。
+     */
     private static final Map<String, AbstractAsrModelService> NAME_TO_SERVICE = new HashMap<>();
-
+    /**
+     * 当前使用的 ASR 服务。
+     */
     private final AbstractAsrModelService current;
 
     /**
@@ -42,15 +46,28 @@ public class AsrModelContext {
             throw new BaseException(ErrorEnum.B_ASR_SETTING_NOT_FOUND);
         }
     }
-
+    /**
+     * 将音频转换为文本。
+     *
+     * @param urlOrUuid 音频地址或 UUID
+     * @return 识别文本
+     */
     public String audioToText(String urlOrUuid) {
         return this.current.audioToText(urlOrUuid);
     }
-
+    /**
+     * 注册 ASR 服务。
+     *
+     * @param modelService ASR 服务
+     */
     public static void addService(AbstractAsrModelService modelService) {
         NAME_TO_SERVICE.put(modelService.getAiModel().getName(), modelService);
     }
-
+    /**
+     * 清理指定平台下的 ASR 服务。
+     *
+     * @param platform 平台名称
+     */
     public static void clearByPlatform(String platform) {
         List<String> needDeleted = NAME_TO_SERVICE.values()
                 .stream()

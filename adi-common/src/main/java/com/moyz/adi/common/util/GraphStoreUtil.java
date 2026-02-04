@@ -6,12 +6,22 @@ import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.*;
-
+/**
+ * 图谱存储查询条件拼装工具类。
+ */
 public class GraphStoreUtil {
-
+    /**
+     * 工具类禁止实例化。
+     */
     private GraphStoreUtil() {
     }
-
+    /**
+     * 构建 WHERE 条件语句。
+     *
+     * @param search 搜索条件
+     * @param alias  节点别名
+     * @return WHERE 子句
+     */
     public static String buildWhereClause(GraphSearchCondition search, String alias) {
         if (null == search) {
             return StringUtils.EMPTY;
@@ -37,7 +47,13 @@ public class GraphStoreUtil {
 
         return whereClause.toString();
     }
-
+    /**
+     * 构建 WHERE 参数。
+     *
+     * @param search 搜索条件
+     * @param alias  节点别名
+     * @return 参数 Map
+     */
     public static Map<String, Object> buildWhereArgs(GraphSearchCondition search, String alias) {
         if (null == search) {
             return Collections.emptyMap();
@@ -50,7 +66,12 @@ public class GraphStoreUtil {
         }
         return result;
     }
-
+    /**
+     * 构建 SET 子句。
+     *
+     * @param metadata 元数据
+     * @return SET 子句
+     */
     public static String buildSetClause(Map<String, Object> metadata) {
         //Apache AGE不支持直接更新property中的Map或List，只能直接替换，否则会出现异常：ERROR:  SET clause doesn't not support updating maps or lists in a property
         StringBuilder setClause = new StringBuilder();
@@ -59,7 +80,12 @@ public class GraphStoreUtil {
         }
         return setClause.toString();
     }
-
+    /**
+     * 构建 SET 参数。
+     *
+     * @param metadata 元数据
+     * @return 参数 Map
+     */
     public static Map<String, Object> buildSetArgs(Map<String, Object> metadata) {
         Map<String, Object> result = new HashMap<>();
         if (MapUtils.isNotEmpty(metadata)) {

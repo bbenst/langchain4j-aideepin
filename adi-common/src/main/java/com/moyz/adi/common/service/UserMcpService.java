@@ -38,13 +38,25 @@ import java.util.function.Function;
 import static com.moyz.adi.common.enums.ErrorEnum.A_USER_MCP_SERVER_NOT_FOUND;
 import static java.util.stream.Collectors.toMap;
 
+/**
+ * 用户 MCP 配置服务。
+ */
 @Slf4j
 @Service
 public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
 
+    /**
+     * MCP 服务。
+     */
     @Resource
     private McpService mcpService;
 
+    /**
+     * 查询用户启用的 MCP 配置。
+     *
+     * @param userId 用户 ID
+     * @return MCP 列表
+     */
     public List<UserMcp> searchEnableByUserId(Long userId) {
         return this.lambdaQuery()
                 .eq(UserMcp::getUserId, userId)
@@ -53,6 +65,14 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
                 .list();
     }
 
+    /**
+     * 分页查询用户 MCP 配置。
+     *
+     * @param userId      用户 ID
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 分页结果
+     */
     public Page<UserMcpDto> searchByUserId(Long userId, Integer currentPage, Integer pageSize) {
         Page<UserMcp> page = this.lambdaQuery()
                 .eq(UserMcp::getUserId, userId)
@@ -85,6 +105,12 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
         return result;
     }
 
+    /**
+     * 保存或更新用户 MCP 配置。
+     *
+     * @param editReq 更新请求
+     * @return 配置 DTO
+     */
     public UserMcpDto saveOrUpdate(UserMcpUpdateReq editReq) {
         if (null == editReq.getMcpCustomizedParams() && null == editReq.getIsEnable()) {
             log.warn("UserMcp edit request is empty, editReq: {}", editReq);
@@ -128,6 +154,13 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
         return dto;
     }
 
+    /**
+     * 创建 MCP 客户端列表。
+     *
+     * @param userId 用户 ID
+     * @param mcpIds MCP ID 列表
+     * @return MCP 客户端列表
+     */
     public List<McpClient> createMcpClients(Long userId, List<Long> mcpIds) {
         List<McpClient> result = new ArrayList<>();
         if (mcpIds == null || mcpIds.isEmpty()) {
@@ -135,7 +168,7 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
             return result;
         }
 
-        //过滤出用户已启用的MCP
+        // 过滤出用户已启用的 MCP
         Map<Long, UserMcp> mcpIdToUserMcp = this.lambdaQuery()
                 .in(UserMcp::getMcpId, mcpIds)
                 .eq(UserMcp::getUserId, userId)
@@ -145,7 +178,7 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
                 .stream()
                 .collect(toMap(UserMcp::getMcpId, Function.identity(), (a, b) -> a));
 
-        // 查询MCP信息
+        // 查询 MCP 信息
         List<Mcp> mcpInfos = mcpService.listByIds(mcpIdToUserMcp.keySet().stream().toList(), true);
         for (Mcp mcp : mcpInfos) {
             UserMcp userMcp = mcpIdToUserMcp.get(mcp.getId());
@@ -154,7 +187,7 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
                 continue;
             }
 
-            // 解密用户设置的MCP参数
+            // 解密用户设置的 MCP 参数
             decryptParams(userMcp.getMcpCustomizedParams(), mcp);
 
             McpTransport transport;
@@ -186,6 +219,11 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
         return result;
     }
 
+    /**
+     * 启用用户 MCP 配置。
+     *
+     * @param uuid 配置 UUID
+     */
     public void enable(String uuid) {
         UserMcp userMcp = PrivilegeUtil.checkAndGetByUuid(uuid, this.query(), A_USER_MCP_SERVER_NOT_FOUND);
         UserMcp updateObj = new UserMcp();
@@ -194,6 +232,11 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
         baseMapper.updateById(updateObj);
     }
 
+    /**
+     * 软删除用户 MCP 配置。
+     *
+     * @param uuid 配置 UUID
+     */
     public void softDelete(String uuid) {
         PrivilegeUtil.checkAndDelete(uuid, this.query(), this.update(), A_USER_MCP_SERVER_NOT_FOUND);
     }
@@ -234,17 +277,23 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
         }
     }
 
+    /**
+     * 设置 MCP 信息，并解密参数以返回前端。
+     *
+     * @param dto DTO
+     * @param mcp MCP 信息
+     */
     public void setMcpInfo(UserMcpDto dto, Mcp mcp) {
         if (mcp == null) {
             return;
         }
         dto.setMcpInfo(mcp);
-        //解密以传到前端
+        // 解密以传到前端
         decryptParams(dto.getMcpCustomizedParams(), mcp);
     }
 
     /**
-     * 创建MCP server中以http方式传输时所需的查询参数
+     * 创建 MCP 服务以 HTTP 方式传输时所需的查询参数。
      *
      * @param mcp     MCP对象
      * @param userMcp 用户MCP对象
@@ -268,7 +317,7 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
 
 
     /**
-     * 创建MCP server中以stdio方式传输时所需的环境变量
+     * 创建 MCP 服务以 stdio 方式传输时所需的环境变量。
      *
      * @param mcp     MCP对象
      * @param userMcp 用户MCP对象

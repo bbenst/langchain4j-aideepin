@@ -12,10 +12,8 @@ import org.aspectj.lang.annotation.Aspect;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
-
-
 /**
- * 通用分布式锁
+ * 分布式锁切面，基于注解实现方法级别加锁。
  *
  * @author moyz
  */
@@ -24,9 +22,20 @@ import java.util.UUID;
 @Component
 public class DistributeLockAspect {
 
+    /**
+     * Redis 操作工具，用于加锁与解锁。
+     */
     @Resource
     private RedisTemplateUtil redisTemplateUtil;
 
+    /**
+     * 执行方法前尝试加锁，执行后释放锁。
+     *
+     * @param joinPoint 连接点
+     * @param distributeLock 分布式锁注解
+     * @return 方法执行结果
+     * @throws Throwable 方法执行异常
+     */
     @Around("@annotation(distributeLock)")
     public Object around(ProceedingJoinPoint joinPoint, DistributeLock distributeLock) throws Throwable {
         String key = distributeLock.redisKey();
@@ -47,15 +56,15 @@ public class DistributeLockAspect {
     }
 
     /**
-     * 校验参数及加锁，如果没有加锁方标识（clientId），则自动生成uuid做为clientId
+     * 校验参数并加锁，未传客户端标识时自动生成。
      *
-     * @param key
+     * @param key 锁键
      * @param clientId              加锁方标识
      * @param expireInSeconds       超时时间 （秒）
      * @param continueIfAcquireFail 获取锁失败是否继续执行后面的业务逻辑
-     * @param redisTemplateUtil     redis工具类
-     * @return
-     * @throws Exception
+     * @param redisTemplateUtil     Redis 工具类
+     * @return 是否加锁成功或允许继续执行
+     * @throws Exception 参数不合法时抛出异常
      */
     public static boolean checkAndLock(String key, String clientId, int expireInSeconds, boolean continueIfAcquireFail, RedisTemplateUtil redisTemplateUtil) throws Exception {
         log.info("lock info,key:{},clientId:{},expireInSecond:{},continueIfAcquireFail:{}", key, clientId, expireInSeconds, continueIfAcquireFail);

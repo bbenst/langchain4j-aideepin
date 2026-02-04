@@ -23,11 +23,20 @@ import java.util.List;
 
 import static com.moyz.adi.common.enums.ErrorEnum.A_AI_IMAGE_NOT_FOUND;
 
+/**
+ * 工作流运行节点服务。
+ */
 @Slf4j
 @Service
 public class WorkflowRuntimeNodeService extends ServiceImpl<WorkflowRuntimeNodeMapper, WorkflowRuntimeNode> {
 
 
+    /**
+     * 查询运行实例下的节点列表。
+     *
+     * @param runtimeId 运行实例 ID
+     * @return 节点 DTO 列表
+     */
     public List<WfRuntimeNodeDto> listByWfRuntimeId(long runtimeId) {
         List<WorkflowRuntimeNode> workflowNodeList = ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(!ThreadContext.getCurrentUser().getIsAdmin(), WorkflowRuntimeNode::getUserId, ThreadContext.getCurrentUser().getId())
@@ -42,6 +51,15 @@ public class WorkflowRuntimeNodeService extends ServiceImpl<WorkflowRuntimeNodeM
         return result;
     }
 
+    /**
+     * 根据节点状态创建运行节点记录。
+     *
+     * @param user        用户
+     * @param wfNodeId    节点 ID
+     * @param wfRuntimeId 运行实例 ID
+     * @param state       节点状态
+     * @return 运行节点 DTO
+     */
     public WfRuntimeNodeDto createByState(User user, long wfNodeId, long wfRuntimeId, WfNodeState state) {
         WorkflowRuntimeNode runtimeNode = new WorkflowRuntimeNode();
         runtimeNode.setUuid(state.getUuid());
@@ -58,6 +76,12 @@ public class WorkflowRuntimeNodeService extends ServiceImpl<WorkflowRuntimeNodeM
         return result;
     }
 
+    /**
+     * 更新节点输入数据。
+     *
+     * @param id    运行节点 ID
+     * @param state 节点状态
+     */
     public void updateInput(Long id, WfNodeState state) {
         if (CollectionUtils.isEmpty(state.getInputs())) {
             log.warn("没有输入数据,id:{}", id);
@@ -80,6 +104,12 @@ public class WorkflowRuntimeNodeService extends ServiceImpl<WorkflowRuntimeNodeM
         baseMapper.updateById(updateOne);
     }
 
+    /**
+     * 更新节点输出数据。
+     *
+     * @param id    运行节点 ID
+     * @param state 节点状态
+     */
     public void updateOutput(Long id, WfNodeState state) {
         WorkflowRuntimeNode node = baseMapper.selectById(id);
         if (null == node) {
@@ -100,6 +130,11 @@ public class WorkflowRuntimeNodeService extends ServiceImpl<WorkflowRuntimeNodeM
         baseMapper.updateById(updateOne);
     }
 
+    /**
+     * 填充输入输出默认值。
+     *
+     * @param dto 运行节点 DTO
+     */
     private void fillInputOutput(WfRuntimeNodeDto dto) {
         if (null == dto.getInput()) {
             dto.setInput(JsonUtil.createObjectNode());

@@ -24,15 +24,26 @@ import java.util.List;
 
 import static com.moyz.adi.common.enums.ErrorEnum.*;
 
+/**
+ * 系统配置查询接口控制器。
+ */
 @Slf4j
 @RestController
 @RequestMapping("/sys/config")
 @Validated
 public class SysConfigController {
 
+    /**
+     * 模型服务，用于读取语音相关模型配置。
+     */
     @Resource
     private AiModelService aiModelService;
 
+    /**
+     * 获取公开系统配置（ASR/TTS 设置及可用音色）。
+     *
+     * @return 系统配置响应
+     */
     @GetMapping(value = "/public/info")
     public SysConfigResp info() {
         String asrSetting = LocalCache.CONFIGS.get(AdiConstant.SysConfigKey.ASR_SETTING);
@@ -52,7 +63,7 @@ public class SysConfigController {
         sysConfigResp.setAsrSetting(JsonUtil.fromJson(asrSetting, AsrSetting.class));
         sysConfigResp.setTtsSetting(JsonUtil.fromJson(ttsSetting, TtsSetting.class));
 
-        //Available voices depend on the modelName in ttsSetting
+        // 可用音色取决于 TTS 配置中的模型名称
         List<ModelVoice> voices = new ArrayList<>();
         if (tts.getSynthesizerSide().equalsIgnoreCase(AdiConstant.TtsConstant.SYNTHESIZER_SERVER)) {
             AiModel aiModel = aiModelService.getByName(tts.getModelName());

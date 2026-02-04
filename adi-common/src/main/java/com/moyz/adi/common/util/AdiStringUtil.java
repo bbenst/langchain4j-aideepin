@@ -7,14 +7,27 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
+/**
+ * 字符串处理工具类。
+ */
 public class AdiStringUtil {
-
+    /**
+     * 清理 HTML 标签并返回纯文本。
+     *
+     * @param str 原始字符串
+     * @return 纯文本内容
+     */
     public static String clearStr(String str) {
         org.jsoup.nodes.Document doc = Jsoup.parse(str);
         return doc.text();
     }
-
+    /**
+     * 获取字符串尾部指定长度的子串。
+     *
+     * @param source     原字符串
+     * @param tailLength 尾部长度
+     * @return 尾部子串
+     */
     public static String tail(String source, int tailLength) {
         if (source.length() <= tailLength) {
             return source;
@@ -44,7 +57,12 @@ public class AdiStringUtil {
         }
         return result;
     }
-
+    /**
+     * 移除常见特殊字符。
+     *
+     * @param input 输入字符串
+     * @return 去除特殊字符后的字符串
+     */
     public static String removeSpecialChar(String input) {
         // 匹配常见特殊符号（包括中英文符号）
         String regEx = "[\\-`~!@#$%^&*()+=|{}':;,.<>/?！￥…（）—【】‘；：”“’。，、？]";
@@ -52,7 +70,12 @@ public class AdiStringUtil {
         Matcher m = p.matcher(input);
         return m.replaceAll("").trim(); // 替换为空字符串并去除首尾空格
     }
-
+    /**
+     * 移除 Markdown 代码块包装。
+     *
+     * @param input 输入字符串
+     * @return 移除代码块后的字符串
+     */
     public static String removeCodeBlock(String input) {
         String regEx = "^```[a-zA-Z0-9]*\\n([\\s\\S]*?)\\n```$";
         Pattern p = Pattern.compile(regEx);

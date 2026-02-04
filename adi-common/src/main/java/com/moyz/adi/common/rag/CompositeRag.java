@@ -33,24 +33,35 @@ import static com.moyz.adi.common.enums.ErrorEnum.B_BREAK_SEARCH;
 import static com.moyz.adi.common.enums.ErrorEnum.B_LLM_SERVICE_DISABLED;
 
 /**
- * 组合向量及图谱数据进行RAG
+ * 组合向量检索与图谱检索进行 RAG 增强。
  */
 @Slf4j
 public class CompositeRag {
 
+    /**
+     * 向量检索 RAG 实例。
+     */
     private final EmbeddingRag embeddingRag;
+    /**
+     * 图谱检索 RAG 实例。
+     */
     private final GraphRag graphRag;
 
+    /**
+     * 构建组合 RAG 实例。
+     *
+     * @param retrieverName 检索器名称
+     */
     public CompositeRag(String retrieverName) {
         this.embeddingRag = EmbeddingRagContext.get(retrieverName);
         this.graphRag = GraphRagContext.get(retrieverName);
     }
 
     /**
-     * 创建Retriever列表
+     * 创建检索器列表。
      *
      * @param param 参数
-     * @return ContentRetriever列表
+     * @return ContentRetriever 列表
      */
     public List<RetrieverWrapper> createRetriever(RetrieverCreateParam param) {
         List<RetrieverWrapper> retrievers = new ArrayList<>();
@@ -70,11 +81,11 @@ public class CompositeRag {
     }
 
     /**
-     * 使用RAG处理提问
+     * 使用 RAG 处理提问。
      *
-     * @param retrievers   ContentRetriever列表
+     * @param retrievers ContentRetriever 列表
      * @param sseAskParams 请求参数
-     * @param consumer     回调
+     * @param consumer 回调
      */
     public void ragChat(List<ContentRetriever> retrievers, SseAskParams sseAskParams, TriConsumer<String, PromptMeta, AnswerMeta> consumer) {
         SSEEmitterHelper sseEmitterHelper = SpringUtil.getBean(SSEEmitterHelper.class);
@@ -102,14 +113,14 @@ public class CompositeRag {
     }
 
     /**
-     * RAG请求，对prompt进行各种增强后发给AI
-     * ps: 挂载了知识库的请求才进行RAG增强
+     * RAG 请求，对提示词进行增强后发送给模型。
+     * 说明：只有挂载知识库的请求才进行 RAG 增强。
      * <p>
-     * TODO...计算并截断超长的请求参数内容（历史记录+向量知识+图谱知识+用户问题+工具）
+     * 待办：计算并截断超长的请求参数内容（历史记录 + 向量知识 + 图谱知识 + 用户问题 + 工具）。
      *
      * @param retrievers 文档召回器（向量、图谱）
-     * @param params     前端传过来的请求参数
-     * @param consumer   LLM响应内容的消费者
+     * @param params 前端传入的请求参数
+     * @param consumer LLM 响应内容的消费者
      */
     private void query(List<ContentRetriever> retrievers, SseAskParams params, TriConsumer<String, PromptMeta, AnswerMeta> consumer) {
         AbstractLLMService llmService = LLMContext.getServiceOrDefault(params.getModelPlatform(), params.getModelName());

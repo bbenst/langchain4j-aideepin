@@ -15,13 +15,25 @@ import org.springframework.stereotype.Service;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * 知识库问答记录引用向量服务。
+ */
 @Slf4j
 @Service
 public class KnowledgeBaseQaRecordReferenceService extends ServiceImpl<KnowledgeBaseQaRecordReferenceMapper, KnowledgeBaseQaRefEmbedding> {
 
+    /**
+     * 向量检索服务。
+     */
     @Resource
     private IEmbeddingService iEmbeddingService;
 
+    /**
+     * 根据问答记录 UUID 查询引用的向量列表。
+     *
+     * @param aqRecordUuid 问答记录 UUID
+     * @return 引用向量列表
+     */
     public List<RefEmbeddingDto> listRefEmbeddings(String aqRecordUuid) {
         List<KnowledgeBaseQaRefEmbedding> recordReferences = this.getBaseMapper().listByQaUuid(aqRecordUuid);
         if (CollectionUtils.isEmpty(recordReferences)) {

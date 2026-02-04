@@ -18,14 +18,26 @@ import java.util.ArrayList;
 import java.util.List;
 
 
+/**
+ * 知识库向量存储服务（Neo4j）。
+ */
 @Slf4j
 @Service
 @ConditionalOnProperty(value = "adi.vector-database", havingValue = "neo4j")
 public class Neo4jKnowledgeEmbeddingService implements IEmbeddingService {
 
+    /**
+     * 向量存储。
+     */
     @Resource
     private EmbeddingStore<TextSegment> embeddingStore;
 
+    /**
+     * 根据向量 ID 列表查询向量信息。
+     *
+     * @param embeddingIds 向量 ID 列表
+     * @return 向量 DTO 列表
+     */
     @Override
     public List<KbItemEmbeddingDto> listByEmbeddingIds(List<String> embeddingIds) {
         if (embeddingIds.isEmpty()) {
@@ -47,6 +59,14 @@ public class Neo4jKnowledgeEmbeddingService implements IEmbeddingService {
         return result;
     }
 
+    /**
+     * 根据知识点 UUID 分页查询向量。
+     *
+     * @param kbItemUuid  知识点 UUID
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 分页结果
+     */
     @Override
     public Page<KbItemEmbeddingDto> listByItemUuid(String kbItemUuid, int currentPage, int pageSize) {
         EmbeddingSearchResult<TextSegment> searchResult = ((AdiNeo4jEmbeddingStore) embeddingStore).searchByMetadata(new IsEqualTo(AdiConstant.MetadataKey.KB_ITEM_UUID, kbItemUuid), 1000);
@@ -91,12 +111,24 @@ public class Neo4jKnowledgeEmbeddingService implements IEmbeddingService {
         return result;
     }
 
+    /**
+     * 删除指定知识点的向量。
+     *
+     * @param kbItemUuid 知识点 UUID
+     * @return 是否删除成功
+     */
     @Override
     public boolean deleteByItemUuid(String kbItemUuid) {
         embeddingStore.removeAll(new IsEqualTo(AdiConstant.MetadataKey.KB_ITEM_UUID, kbItemUuid));
         return true;
     }
 
+    /**
+     * 统计知识库下的向量数量。
+     *
+     * @param kbUuid 知识库 UUID
+     * @return 数量
+     */
     @Override
     public Integer countByKbUuid(String kbUuid) {
         return ((AdiNeo4jEmbeddingStore) embeddingStore).countByMetadata(new IsEqualTo(AdiConstant.MetadataKey.KB_UUID, kbUuid));

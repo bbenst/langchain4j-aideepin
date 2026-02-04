@@ -14,6 +14,8 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 
 /**
+ * 方法参数日志切面。
+ *
  * @author myz
  */
 @Slf4j
@@ -21,16 +23,22 @@ import java.lang.reflect.Parameter;
 @Component
 public class ParamsLogAspect {
 
+    /**
+     * 在标注 ParamsLog 的方法执行前记录参数。
+     *
+     * @param joinPoint 连接点
+     * @param paramsLog 注解信息
+     */
     @Before(value = "@annotation(paramsLog)")
     public void before(JoinPoint joinPoint, ParamsLog paramsLog) {
         paramsLog(joinPoint, log);
     }
 
     /**
-     * 输出方法参数到日志
+     * 输出方法参数到日志。
      *
-     * @param joinPoint joinPoint
-     * @param logger    日志
+     * @param joinPoint 连接点
+     * @param logger    日志记录器
      */
     static void paramsLog(JoinPoint joinPoint, Logger logger) {
         String className = joinPoint.getSignature().getDeclaringType().getName();

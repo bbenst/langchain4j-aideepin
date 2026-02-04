@@ -26,34 +26,73 @@ import static dev.langchain4j.spi.ServiceHelper.loadFactories;
 import static java.util.stream.Collectors.toList;
 
 /**
- * 复制dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever并做了少许改动；
- * 增加支持：缓存命中的向量以便后续记录到数据库中
+ * 向量检索内容召回器，基于 EmbeddingStoreContentRetriever 做了定制。
+ * 主要改动：缓存命中的向量及分数，便于后续落库。
  */
 @Slf4j
 public class AdiEmbeddingStoreContentRetriever implements ContentRetriever {
 
+    /**
+     * 默认最大返回数量提供器。
+     */
     public static final Function<Query, Integer> DEFAULT_MAX_RESULTS = (query) -> 3;
+    /**
+     * 默认最小相似度提供器。
+     */
     public static final Function<Query, Double> DEFAULT_MIN_SCORE = (query) -> 0.0;
+    /**
+     * 默认过滤条件提供器。
+     */
     public static final Function<Query, Filter> DEFAULT_FILTER = (query) -> null;
 
+    /**
+     * 默认显示名称。
+     */
     public static final String DEFAULT_DISPLAY_NAME = "Default";
 
+    /**
+     * 向量存储实现。
+     */
     private final EmbeddingStore<TextSegment> embeddingStore;
+    /**
+     * 向量化模型。
+     */
     private final EmbeddingModel embeddingModel;
 
+    /**
+     * 最大返回数量提供器。
+     */
     private final Function<Query, Integer> maxResultsProvider;
+    /**
+     * 最小相似度提供器。
+     */
     private final Function<Query, Double> minScoreProvider;
+    /**
+     * 过滤条件提供器。
+     */
     private final Function<Query, Filter> filterProvider;
 
+    /**
+     * 显示名称。
+     */
     private final String displayName;
 
     /**
-     * 新增的特性: 命中的向量及对应的分数
+     * 命中的向量及对应的分数。
      */
     private final Map<String, Double> embeddingToScore = new HashMap<>();
 
+    /**
+     * 是否在未命中时中断流程。
+     */
     private final boolean breakIfSearchMissed;
 
+    /**
+     * 构建默认检索器。
+     *
+     * @param embeddingStore 向量存储实现
+     * @param embeddingModel 向量化模型
+     */
     public AdiEmbeddingStoreContentRetriever(EmbeddingStore<TextSegment> embeddingStore,
                                              EmbeddingModel embeddingModel) {
         this(
@@ -67,6 +106,13 @@ public class AdiEmbeddingStoreContentRetriever implements ContentRetriever {
         );
     }
 
+    /**
+     * 构建指定最大返回数量的检索器。
+     *
+     * @param embeddingStore 向量存储实现
+     * @param embeddingModel 向量化模型
+     * @param maxResults 最大返回数量
+     */
     public AdiEmbeddingStoreContentRetriever(EmbeddingStore<TextSegment> embeddingStore,
                                              EmbeddingModel embeddingModel,
                                              int maxResults) {
@@ -81,6 +127,14 @@ public class AdiEmbeddingStoreContentRetriever implements ContentRetriever {
         );
     }
 
+    /**
+     * 构建指定最大返回数量与最小相似度的检索器。
+     *
+     * @param embeddingStore 向量存储实现
+     * @param embeddingModel 向量化模型
+     * @param maxResults 最大返回数量
+     * @param minScore 最小相似度
+     */
     public AdiEmbeddingStoreContentRetriever(EmbeddingStore<TextSegment> embeddingStore,
                                              EmbeddingModel embeddingModel,
                                              Integer maxResults,
@@ -96,6 +150,17 @@ public class AdiEmbeddingStoreContentRetriever implements ContentRetriever {
         );
     }
 
+    /**
+     * 内部构建方法。
+     *
+     * @param displayName 显示名称
+     * @param embeddingStore 向量存储实现
+     * @param embeddingModel 向量化模型
+     * @param dynamicMaxResults 最大返回数量提供器
+     * @param dynamicMinScore 最小相似度提供器
+     * @param dynamicFilter 过滤条件提供器
+     * @param breakIfSearchMissed 是否在未命中时中断
+     */
     private AdiEmbeddingStoreContentRetriever(String displayName,
                                               EmbeddingStore<TextSegment> embeddingStore,
                                               EmbeddingModel embeddingModel,
@@ -115,6 +180,11 @@ public class AdiEmbeddingStoreContentRetriever implements ContentRetriever {
         this.breakIfSearchMissed = breakIfSearchMissed;
     }
 
+    /**
+     * 通过 SPI 加载默认向量化模型。
+     *
+     * @return 向量化模型
+     */
     private static EmbeddingModel loadEmbeddingModel() {
         Collection<EmbeddingModelFactory> factories = loadFactories(EmbeddingModelFactory.class);
         if (factories.size() > 1) {
@@ -129,24 +199,59 @@ public class AdiEmbeddingStoreContentRetriever implements ContentRetriever {
         return null;
     }
 
+    /**
+     * 创建构建器。
+     *
+     * @return 构建器
+     */
     public static AdiEmbeddingStoreContentRetriever.AdiEmbeddingStoreContentRetrieverBuilder builder() {
         return new AdiEmbeddingStoreContentRetriever.AdiEmbeddingStoreContentRetrieverBuilder();
     }
 
+    /**
+     * 构建器。
+     */
     public static class AdiEmbeddingStoreContentRetrieverBuilder {
 
+        /**
+         * 显示名称。
+         */
         private String displayName;
+        /**
+         * 向量存储实现。
+         */
         private EmbeddingStore<TextSegment> embeddingStore;
+        /**
+         * 向量化模型。
+         */
         private EmbeddingModel embeddingModel;
+        /**
+         * 最大返回数量提供器。
+         */
         private Function<Query, Integer> dynamicMaxResults;
+        /**
+         * 最小相似度提供器。
+         */
         private Function<Query, Double> dynamicMinScore;
+        /**
+         * 过滤条件提供器。
+         */
         private Function<Query, Filter> dynamicFilter;
 
+        /**
+         * 是否在未命中时中断流程。
+         */
         private Boolean breakIfSearchMissed;
 
         AdiEmbeddingStoreContentRetrieverBuilder() {
         }
 
+        /**
+         * 设置最大返回数量。
+         *
+         * @param maxResults 最大数量
+         * @return 构建器
+         */
         public AdiEmbeddingStoreContentRetriever.AdiEmbeddingStoreContentRetrieverBuilder maxResults(Integer maxResults) {
             if (maxResults != null) {
                 dynamicMaxResults = (query) -> ensureGreaterThanZero(maxResults, "maxResults");
@@ -154,6 +259,12 @@ public class AdiEmbeddingStoreContentRetriever implements ContentRetriever {
             return this;
         }
 
+        /**
+         * 设置最小相似度。
+         *
+         * @param minScore 最小相似度
+         * @return 构建器
+         */
         public AdiEmbeddingStoreContentRetriever.AdiEmbeddingStoreContentRetrieverBuilder minScore(Double minScore) {
             if (minScore != null) {
                 dynamicMinScore = (query) -> ensureBetween(minScore, 0, 1, "minScore");
@@ -161,6 +272,12 @@ public class AdiEmbeddingStoreContentRetriever implements ContentRetriever {
             return this;
         }
 
+        /**
+         * 设置过滤条件。
+         *
+         * @param filter 过滤条件
+         * @return 构建器
+         */
         public AdiEmbeddingStoreContentRetriever.AdiEmbeddingStoreContentRetrieverBuilder filter(Filter filter) {
             if (filter != null) {
                 dynamicFilter = (query) -> filter;
@@ -168,59 +285,119 @@ public class AdiEmbeddingStoreContentRetriever implements ContentRetriever {
             return this;
         }
 
+        /**
+         * 设置显示名称。
+         *
+         * @param displayName 显示名称
+         * @return 构建器
+         */
         public AdiEmbeddingStoreContentRetriever.AdiEmbeddingStoreContentRetrieverBuilder displayName(String displayName) {
             this.displayName = displayName;
             return this;
         }
 
+        /**
+         * 设置向量存储实现。
+         *
+         * @param embeddingStore 向量存储实现
+         * @return 构建器
+         */
         public AdiEmbeddingStoreContentRetriever.AdiEmbeddingStoreContentRetrieverBuilder embeddingStore(EmbeddingStore<TextSegment> embeddingStore) {
             this.embeddingStore = embeddingStore;
             return this;
         }
 
+        /**
+         * 设置向量化模型。
+         *
+         * @param embeddingModel 向量化模型
+         * @return 构建器
+         */
         public AdiEmbeddingStoreContentRetriever.AdiEmbeddingStoreContentRetrieverBuilder embeddingModel(EmbeddingModel embeddingModel) {
             this.embeddingModel = embeddingModel;
             return this;
         }
 
+        /**
+         * 设置最大返回数量提供器。
+         *
+         * @param dynamicMaxResults 最大返回数量提供器
+         * @return 构建器
+         */
         public AdiEmbeddingStoreContentRetriever.AdiEmbeddingStoreContentRetrieverBuilder dynamicMaxResults(Function<Query, Integer> dynamicMaxResults) {
             this.dynamicMaxResults = dynamicMaxResults;
             return this;
         }
 
+        /**
+         * 设置最小相似度提供器。
+         *
+         * @param dynamicMinScore 最小相似度提供器
+         * @return 构建器
+         */
         public AdiEmbeddingStoreContentRetriever.AdiEmbeddingStoreContentRetrieverBuilder dynamicMinScore(Function<Query, Double> dynamicMinScore) {
             this.dynamicMinScore = dynamicMinScore;
             return this;
         }
 
+        /**
+         * 设置过滤条件提供器。
+         *
+         * @param dynamicFilter 过滤条件提供器
+         * @return 构建器
+         */
         public AdiEmbeddingStoreContentRetriever.AdiEmbeddingStoreContentRetrieverBuilder dynamicFilter(Function<Query, Filter> dynamicFilter) {
             this.dynamicFilter = dynamicFilter;
             return this;
         }
 
+        /**
+         * 设置未命中时是否中断流程。
+         *
+         * @param breakIfSearchMissed 是否中断
+         * @return 构建器
+         */
         public AdiEmbeddingStoreContentRetrieverBuilder breakIfSearchMissed(boolean breakIfSearchMissed) {
             this.breakIfSearchMissed = breakIfSearchMissed;
             return this;
         }
 
+        /**
+         * 构建检索器。
+         *
+         * @return 检索器实例
+         */
         public AdiEmbeddingStoreContentRetriever build() {
             return new AdiEmbeddingStoreContentRetriever(this.displayName, this.embeddingStore, this.embeddingModel, this.dynamicMaxResults, this.dynamicMinScore, this.dynamicFilter, this.breakIfSearchMissed);
         }
 
 
+        /**
+         * 输出调试信息。
+         *
+         * @return 描述字符串
+         */
         public String toString() {
             return "AdiEmbeddingStoreContentRetriever.AdiEmbeddingStoreContentRetrieverBuilder(displayName=" + this.displayName + ", embeddingStore=" + this.embeddingStore + ", embeddingModel=" + this.embeddingModel + ", dynamicMaxResults=" + this.dynamicMaxResults + ", dynamicMinScore=" + this.dynamicMinScore + ", dynamicFilter=" + this.dynamicFilter + ", breakIfSearchMissed=" + this.breakIfSearchMissed + ")";
         }
     }
 
     /**
-     * Creates an instance of an {@code EmbeddingStoreContentRetriever} from the specified {@link EmbeddingStore}
-     * and {@link EmbeddingModel} found through SPI (see {@link EmbeddingModelFactory}).
+     * 使用指定的向量存储创建检索器，向量模型通过 SPI 加载。
+     *
+     * @param embeddingStore 向量存储实现
+     * @return 检索器实例
      */
     public static AdiEmbeddingStoreContentRetriever from(EmbeddingStore<TextSegment> embeddingStore) {
         return builder().embeddingStore(embeddingStore).build();
     }
 
+    /**
+     * 执行向量检索。
+     *
+     * @param query 查询参数
+     * @return 内容列表
+     */
     @Override
     public List<Content> retrieve(Query query) {
 
@@ -244,7 +421,7 @@ public class AdiEmbeddingStoreContentRetriever implements ContentRetriever {
                 .map(Content::from)
                 .collect(toList());
 
-        //判断是否要强行中断查询，没有命中则不再进行下一步操作（比如说请求LLM），直接抛出异常中断流程
+        // 未命中时直接中断流程，避免继续调用下游模型。
         if (breakIfSearchMissed && CollectionUtils.isEmpty(result)) {
             log.warn("Embedding search missed,query:{}", query.text());
             throw new BaseException(B_BREAK_SEARCH);
@@ -253,9 +430,9 @@ public class AdiEmbeddingStoreContentRetriever implements ContentRetriever {
     }
 
     /**
-     * aideepin新增方法
+     * 获取检索命中的向量及分数。
      *
-     * @return
+     * @return 向量 ID 与分数映射
      */
     public Map<String, Double> getRetrievedEmbeddingToScore() {
         return this.embeddingToScore;

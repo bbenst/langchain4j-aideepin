@@ -47,23 +47,44 @@ import static com.moyz.adi.common.cosntant.RedisKeyConstant.KB_STATISTIC_RECALCU
 import static com.moyz.adi.common.cosntant.RedisKeyConstant.USER_INDEXING;
 import static com.moyz.adi.common.enums.ErrorEnum.*;
 
+/**
+ * 知识库知识点服务。
+ */
 @Slf4j
 @Service
 public class KnowledgeBaseItemService extends ServiceImpl<KnowledgeBaseItemMapper, KnowledgeBaseItem> {
 
+    /**
+     * 自身代理对象（用于触发异步方法）。
+     */
     @Resource
     @Lazy
     private KnowledgeBaseItemService self;
 
+    /**
+     * Redis 操作模板。
+     */
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
+    /**
+     * 向量索引服务。
+     */
     @Resource
     private IEmbeddingService iEmbeddingService;
 
+    /**
+     * 文件服务。
+     */
     @Resource
     private FileService fileService;
 
+    /**
+     * 新增或更新知识点。
+     *
+     * @param itemEditReq 知识点编辑请求
+     * @return 知识点实体
+     */
     public KnowledgeBaseItem saveOrUpdate(KbItemEditReq itemEditReq) {
         String uuid = itemEditReq.getUuid();
         KnowledgeBaseItem item = new KnowledgeBaseItem();
@@ -92,6 +113,12 @@ public class KnowledgeBaseItemService extends ServiceImpl<KnowledgeBaseItemMappe
                 .one();
     }
 
+    /**
+     * 获取未删除的知识点。
+     *
+     * @param uuid 知识点 UUID
+     * @return 知识点实体
+     */
     public KnowledgeBaseItem getEnable(String uuid) {
         return ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(KnowledgeBaseItem::getUuid, uuid)
@@ -99,6 +126,15 @@ public class KnowledgeBaseItemService extends ServiceImpl<KnowledgeBaseItemMappe
                 .one();
     }
 
+    /**
+     * 查询知识点分页列表并补齐文件 URL。
+     *
+     * @param kbUuid      知识库 UUID
+     * @param keyword     关键词
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 分页结果
+     */
     public Page<KbItemDto> search(String kbUuid, String keyword, Integer currentPage, Integer pageSize) {
         Page<KbItemDto> page = baseMapper.searchByKb(new Page<>(currentPage, pageSize), kbUuid, keyword);
         page.getRecords().forEach(item -> item.setSourceFileUrl(fileService.getUrl(item.getSourceFileUuid())));
@@ -157,6 +193,13 @@ public class KnowledgeBaseItemService extends ServiceImpl<KnowledgeBaseItemMappe
 
     }
 
+    /**
+     * 向量化索引知识点内容。
+     *
+     * @param knowledgeBase 知识库
+     * @param kbItem        知识点
+     * @param document      文档内容
+     */
     private void indexingEmbedding(KnowledgeBase knowledgeBase, KnowledgeBaseItem kbItem, Document document) {
         try {
             ChainWrappers.lambdaUpdateChain(baseMapper)
@@ -179,6 +222,14 @@ public class KnowledgeBaseItemService extends ServiceImpl<KnowledgeBaseItemMappe
         }
     }
 
+    /**
+     * 图谱化索引知识点内容。
+     *
+     * @param user          用户
+     * @param knowledgeBase 知识库
+     * @param kbItem        知识点
+     * @param document      文档内容
+     */
     private void indexingGraph(User user, KnowledgeBase knowledgeBase, KnowledgeBaseItem kbItem, Document document) {
         try {
             ChainWrappers.lambdaUpdateChain(baseMapper)
@@ -193,7 +244,7 @@ public class KnowledgeBaseItemService extends ServiceImpl<KnowledgeBaseItemMappe
                             .build()
             );
 
-            //Ingest document
+            // 执行图谱化文档入库。
             GraphRagContext.get(KNOWLEDGE_BASE).ingest(
                     GraphIngestParams.builder()
                             .user(user)
@@ -220,6 +271,12 @@ public class KnowledgeBaseItemService extends ServiceImpl<KnowledgeBaseItemMappe
         }
     }
 
+    /**
+     * 软删除知识点并清理向量索引。
+     *
+     * @param uuid 知识点 UUID
+     * @return 是否删除成功
+     */
     @Transactional
     public boolean softDelete(String uuid) {
         boolean privilege = checkPrivilege(uuid);
@@ -240,6 +297,12 @@ public class KnowledgeBaseItemService extends ServiceImpl<KnowledgeBaseItemMappe
         return true;
     }
 
+    /**
+     * 统计指定知识库下的知识点数量。
+     *
+     * @param kbUuid 知识库 UUID
+     * @return 数量
+     */
     public int countByKbUuid(String kbUuid) {
         return ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(KnowledgeBaseItem::getKbUuid, kbUuid)
@@ -248,6 +311,11 @@ public class KnowledgeBaseItemService extends ServiceImpl<KnowledgeBaseItemMappe
                 .intValue();
     }
 
+    /**
+     * 统计当天新增知识点数量。
+     *
+     * @return 数量
+     */
     public int countTodayCreated() {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime beginTime = LocalDateTime.of(now.getYear(), now.getMonth(), now.getDayOfMonth(), 0, 0, 0);
@@ -255,10 +323,21 @@ public class KnowledgeBaseItemService extends ServiceImpl<KnowledgeBaseItemMappe
         return baseMapper.countCreatedByTimePeriod(beginTime, endTime);
     }
 
+    /**
+     * 统计全部知识点数量。
+     *
+     * @return 数量
+     */
     public int countAllCreated() {
         return baseMapper.countAllCreated();
     }
 
+    /**
+     * 校验知识点访问权限。
+     *
+     * @param uuid 知识点 UUID
+     * @return 是否有权限
+     */
     private boolean checkPrivilege(String uuid) {
         if (StringUtils.isBlank(uuid)) {
             throw new BaseException(A_PARAMS_ERROR);

@@ -29,16 +29,32 @@ import java.util.List;
 
 import static com.moyz.adi.common.cosntant.AdiConstant.WorkflowConstant.WORKFLOW_PROCESS_STATUS_DOING;
 
+/**
+ * 工作流运行实例服务。
+ */
 @Slf4j
 @Service
 public class WorkflowRuntimeService extends ServiceImpl<WorkflowRunMapper, WorkflowRuntime> {
 
+    /**
+     * 工作流服务。
+     */
     @Resource
     private WorkflowService workflowService;
 
+    /**
+     * 工作流运行节点服务。
+     */
     @Resource
     private WorkflowRuntimeNodeService workflowRuntimeNodeService;
 
+    /**
+     * 创建工作流运行实例。
+     *
+     * @param user       用户
+     * @param workflowId 工作流 ID
+     * @return 运行实例响应
+     */
     public WfRuntimeResp create(User user, Long workflowId) {
         WorkflowRuntime one = new WorkflowRuntime();
         one.setUuid(UuidUtil.createShort());
@@ -50,6 +66,12 @@ public class WorkflowRuntimeService extends ServiceImpl<WorkflowRunMapper, Workf
         return changeToDTO(one);
     }
 
+    /**
+     * 更新输入数据。
+     *
+     * @param id      运行实例 ID
+     * @param wfState 工作流状态
+     */
     public void updateInput(long id, WfState wfState) {
         if (CollectionUtils.isEmpty(wfState.getInput())) {
             log.warn("没有输入数据,id:{}", id);
@@ -71,6 +93,13 @@ public class WorkflowRuntimeService extends ServiceImpl<WorkflowRunMapper, Workf
         baseMapper.updateById(updateOne);
     }
 
+    /**
+     * 更新输出数据。
+     *
+     * @param id      运行实例 ID
+     * @param wfState 工作流状态
+     * @return 更新后的实例
+     */
     public WorkflowRuntime updateOutput(long id, WfState wfState) {
         WorkflowRuntime node = baseMapper.selectById(id);
         if (null == node) {
@@ -89,6 +118,13 @@ public class WorkflowRuntimeService extends ServiceImpl<WorkflowRunMapper, Workf
         return updateOne;
     }
 
+    /**
+     * 更新运行状态。
+     *
+     * @param id           运行实例 ID
+     * @param processStatus 状态值
+     * @param statusRemark  状态说明
+     */
     public void updateStatus(long id, int processStatus, String statusRemark) {
         WorkflowRuntime node = baseMapper.selectById(id);
         if (null == node) {
@@ -102,6 +138,12 @@ public class WorkflowRuntimeService extends ServiceImpl<WorkflowRunMapper, Workf
         baseMapper.updateById(updateOne);
     }
 
+    /**
+     * 按 UUID 获取运行实例。
+     *
+     * @param uuid 运行实例 UUID
+     * @return 运行实例
+     */
     public WorkflowRuntime getByUuid(String uuid) {
         return ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(!ThreadContext.getCurrentUser().getIsAdmin(), WorkflowRuntime::getUserId, ThreadContext.getCurrentUserId())
@@ -111,6 +153,14 @@ public class WorkflowRuntimeService extends ServiceImpl<WorkflowRunMapper, Workf
                 .one();
     }
 
+    /**
+     * 分页查询运行实例。
+     *
+     * @param wfUuid      工作流 UUID
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 分页结果
+     */
     public Page<WfRuntimeResp> page(String wfUuid, Integer currentPage, Integer pageSize) {
         Workflow workflow = workflowService.getOrThrow(wfUuid);
         User user = ThreadContext.getCurrentUser();
@@ -128,11 +178,23 @@ public class WorkflowRuntimeService extends ServiceImpl<WorkflowRunMapper, Workf
         return result;
     }
 
+    /**
+     * 查询运行实例的节点列表。
+     *
+     * @param runtimeUuid 运行实例 UUID
+     * @return 节点列表
+     */
     public List<WfRuntimeNodeDto> listByRuntimeUuid(String runtimeUuid) {
         WorkflowRuntime runtime = PrivilegeUtil.checkAndGetByUuid(runtimeUuid, this.query(), ErrorEnum.A_WF_RUNTIME_NOT_FOUND);
         return workflowRuntimeNodeService.listByWfRuntimeId(runtime.getId());
     }
 
+    /**
+     * 删除工作流的全部运行实例。
+     *
+     * @param wfUuid 工作流 UUID
+     * @return 是否删除成功
+     */
     public boolean deleteAll(String wfUuid) {
         Workflow workflow = workflowService.getOrThrow(wfUuid);
         User user = ThreadContext.getCurrentUser();
@@ -143,6 +205,12 @@ public class WorkflowRuntimeService extends ServiceImpl<WorkflowRunMapper, Workf
                 .update();
     }
 
+    /**
+     * 将运行实例转换为响应 DTO。
+     *
+     * @param runtime 运行实例
+     * @return 响应 DTO
+     */
     private WfRuntimeResp changeToDTO(WorkflowRuntime runtime) {
         WfRuntimeResp result = new WfRuntimeResp();
         BeanUtils.copyProperties(runtime, result);
@@ -150,11 +218,11 @@ public class WorkflowRuntimeService extends ServiceImpl<WorkflowRunMapper, Workf
         return result;
     }
 
-//    private void fillNodes(WfRuntimeResp runtimeResp) {
-//        List<WfRuntimeNodeDto> nodes = workflowRuntimeNodeService.listByWfRuntimeId(runtimeResp.getId());
-//        runtimeResp.setNodes(nodes);
-//    }
-
+    /**
+     * 填充输入输出默认值。
+     *
+     * @param target 运行实例响应
+     */
     private void fillInputOutput(WfRuntimeResp target) {
         if (null == target.getInput()) {
             target.setInput(JsonUtil.createObjectNode());
@@ -164,6 +232,12 @@ public class WorkflowRuntimeService extends ServiceImpl<WorkflowRunMapper, Workf
         }
     }
 
+    /**
+     * 软删除运行实例。
+     *
+     * @param uuid 运行实例 UUID
+     * @return 是否删除成功
+     */
     public boolean softDelete(String uuid) {
         WorkflowRuntime workflowRuntime = PrivilegeUtil.checkAndGetByUuid(uuid, this.query(), ErrorEnum.A_WF_NOT_FOUND);
         return ChainWrappers.lambdaUpdateChain(baseMapper)

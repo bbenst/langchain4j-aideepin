@@ -22,17 +22,26 @@ import java.util.List;
 
 import static com.moyz.adi.common.cosntant.AdiConstant.POI_DOC_TYPES;
 import static com.moyz.adi.common.enums.ErrorEnum.B_DELETE_FILE_ERROR;
-
+/**
+ * 阿里云 OSS 文件操作器。
+ */
 @Slf4j
 public class AliyunOssFileOperator implements IFileOperator {
-
+    /**
+     * 阿里云 OSS 文件辅助。
+     */
     private static AliyunOssFileHelper aliyunOssFileHelper;
+    /**
+     * 检查文件是否存在。
+     */
 
     @Override
     public boolean checkIfExist(AdiFile adiFile) {
         return aliyunOssFileHelper.doesObjectExist(getObjectName(adiFile));
     }
-
+    /**
+     * 保存文件并返回访问路径与后缀。
+     */
     @Override
     public Pair<String, String> save(MultipartFile file, boolean image, String fileName) {
         String objectName;
@@ -50,14 +59,18 @@ public class AliyunOssFileOperator implements IFileOperator {
         }
         return new ImmutablePair<>(aliyunOssFileHelper.getUrl(objectName), ext);
     }
-
+    /**
+     * 保存字节数组并返回访问路径与后缀。
+     */
     @Override
     public Pair<String, String> save(byte[] file, boolean image, String name) {
         String ext = LocalFileUtil.getFileExtension(name);
         aliyunOssFileHelper.saveObj(file, name);
         return new ImmutablePair<>(aliyunOssFileHelper.getUrl(name), ext);
     }
-
+    /**
+     * 通过远程 URL 保存图片。
+     */
     @Override
     public SaveRemoteImageResult saveImageFromUrl(String imageUrl, String fileName) {
         String filePath = LocalFileUtil.saveFromUrl(imageUrl, fileName, "png");
@@ -66,16 +79,18 @@ public class AliyunOssFileOperator implements IFileOperator {
         String objName = fileName + "." + ext;
         aliyunOssFileHelper.saveObj(bytes, objName);
         try {
-            //传到oss后把本地临时文件删除
+            // 传到 OSS 后删除本地临时文件
             Files.deleteIfExists(Paths.get(filePath));
         } catch (IOException e) {
             throw new BaseException(B_DELETE_FILE_ERROR);
         }
-        //对于OSS，存储的是对象名称，而不是完整URL
+        // 对于 OSS，仅存储对象名称而非完整 URL
         filePath = objName;
         return SaveRemoteImageResult.builder().ext(ext).originalName(fileName).pathOrUrl(filePath).build();
     }
-
+    /**
+     * 删除文件。
+     */
     @Override
     public void delete(AdiFile adiFile) {
         if (StringUtils.isBlank(adiFile.getPath())) {
@@ -83,12 +98,16 @@ public class AliyunOssFileOperator implements IFileOperator {
         }
         aliyunOssFileHelper.deleteObjs(List.of(getObjectName(adiFile)));
     }
-
+    /**
+     * 获取文件访问 URL。
+     */
     @Override
     public String getFileUrl(AdiFile adiFile) {
         return aliyunOssFileHelper.getUrl(getObjectName(adiFile));
     }
-
+    /**
+     * 加载文档内容。
+     */
     @Override
     public Document loadDocument(AdiFile adiFile) {
         Document result = null;
@@ -103,11 +122,15 @@ public class AliyunOssFileOperator implements IFileOperator {
         }
         return result;
     }
-
+    /**
+     * 获取对象名称。
+     */
     public static String getObjectName(AdiFile adiFile) {
         return adiFile.getUuid() + "." + adiFile.getExt();
     }
-
+    /**
+     * 初始化 OSS 辅助实例。
+     */
     public static void init(AliyunOssFileHelper aliyunOssFileHelper) {
         AliyunOssFileOperator.aliyunOssFileHelper = aliyunOssFileHelper;
     }

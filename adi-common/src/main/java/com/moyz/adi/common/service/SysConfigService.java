@@ -25,19 +25,28 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 系统配置服务。
+ */
 @Slf4j
 @Service
 public class SysConfigService extends ServiceImpl<SysConfigMapper, SysConfig> {
 
+    /**
+     * 阿里云 OSS 配置助手。
+     */
     @Resource
     private AliyunOssFileHelper aliyunOssFileHelper;
 
+    /**
+     * 加载配置并缓存到本地。
+     */
     public void loadAndCache() {
         List<SysConfig> configsFromDB = this.lambdaQuery().eq(SysConfig::getIsDeleted, false).list();
         if (LocalCache.CONFIGS.isEmpty()) {
             configsFromDB.forEach(item -> LocalCache.CONFIGS.put(item.getName(), item.getValue()));
         } else {
-            //remove deleted config
+            // 移除已删除的配置
             List<String> deletedKeys = new ArrayList<>();
             LocalCache.CONFIGS.forEach((k, v) -> {
                 boolean deleted = configsFromDB.stream().noneMatch(sysConfig -> sysConfig.getName().equals(k));
@@ -49,7 +58,7 @@ public class SysConfigService extends ServiceImpl<SysConfigMapper, SysConfig> {
                 deletedKeys.forEach(LocalCache.CONFIGS::remove);
             }
 
-            //add or update config
+            // 新增或更新配置
             for (SysConfig item : configsFromDB) {
                 String key = item.getName();
                 LocalCache.CONFIGS.put(key, item.getValue());
@@ -63,6 +72,12 @@ public class SysConfigService extends ServiceImpl<SysConfigMapper, SysConfig> {
         aliyunOssFileHelper.reload();
     }
 
+    /**
+     * 编辑配置项。
+     *
+     * @param sysConfigDto 编辑请求
+     * @return 更新行数
+     */
     public int edit(SysConfigEditDto sysConfigDto) {
         LambdaQueryWrapper<SysConfig> lambdaQueryWrapper = new LambdaQueryWrapper<>();
         lambdaQueryWrapper.eq(SysConfig::getName, sysConfigDto.getName());
@@ -81,6 +96,12 @@ public class SysConfigService extends ServiceImpl<SysConfigMapper, SysConfig> {
         return ret;
     }
 
+    /**
+     * 软删除配置项。
+     *
+     * @param id 配置 ID
+     * @return 是否删除成功
+     */
     public boolean softDelete(Long id) {
         SysConfig sysConfig = new SysConfig();
         sysConfig.setIsDeleted(true);
@@ -91,15 +112,33 @@ public class SysConfigService extends ServiceImpl<SysConfigMapper, SysConfig> {
         return ret > 0;
     }
 
+    /**
+     * 获取最大对话数量。
+     *
+     * @return 最大数量
+     */
     public int getConversationMaxNum() {
         String maxNum = LocalCache.CONFIGS.get(AdiConstant.SysConfigKey.CONVERSATION_MAX_NUM);
         return Integer.parseInt(maxNum);
     }
 
+    /**
+     * 按键获取配置值。
+     *
+     * @param key 配置键
+     * @return 配置值
+     */
     public static String getByKey(String key) {
         return LocalCache.CONFIGS.get(key);
     }
 
+    /**
+     * 按键获取整数配置值。
+     *
+     * @param key          配置键
+     * @param defaultValue 默认值
+     * @return 配置值
+     */
     public static Integer getIntByKey(String key, int defaultValue) {
         String val = LocalCache.CONFIGS.get(key);
         if (null != val) {
@@ -109,6 +148,14 @@ public class SysConfigService extends ServiceImpl<SysConfigMapper, SysConfig> {
     }
 
 
+    /**
+     * 分页查询配置列表。
+     *
+     * @param searchReq   查询条件
+     * @param currentPage 当前页
+     * @param pageSize    页大小
+     * @return 分页结果
+     */
     public Page<SysConfigDto> search(SysConfigSearchReq searchReq, Integer currentPage, Integer pageSize) {
         LambdaQueryWrapper<SysConfig> wrapper = new LambdaQueryWrapper<>();
         if (StringUtils.isNotBlank(searchReq.getKeyword())) {

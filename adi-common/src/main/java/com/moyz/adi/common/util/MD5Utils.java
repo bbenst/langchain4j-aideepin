@@ -7,9 +7,16 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-
+/**
+ * MD5 摘要计算工具类。
+ */
 public class MD5Utils {
-
+    /**
+     * 生成字符串的 MD5 值。
+     *
+     * @param input 输入字符串
+     * @return MD5 十六进制字符串
+     */
     public static String generateMD5(String input) {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
@@ -23,7 +30,12 @@ public class MD5Utils {
             throw new RuntimeException(e);
         }
     }
-
+    /**
+     * 计算文件的 MD5 值。
+     *
+     * @param filePath 文件路径
+     * @return MD5 十六进制字符串
+     */
     public static String calculateMD5(String filePath) {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
@@ -46,7 +58,12 @@ public class MD5Utils {
             throw new RuntimeException(ioException);
         }
     }
-
+    /**
+     * 计算上传文件的 MD5 值。
+     *
+     * @param file 上传文件
+     * @return MD5 十六进制字符串
+     */
     public static String md5ByMultipartFile(MultipartFile file) {
         try {
             return DigestUtils.md5DigestAsHex(file.getBytes());
@@ -55,4 +72,3 @@ public class MD5Utils {
         }
     }
 }
-

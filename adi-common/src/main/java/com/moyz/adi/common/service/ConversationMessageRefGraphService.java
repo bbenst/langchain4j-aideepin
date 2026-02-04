@@ -13,10 +13,19 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * 对话消息图谱引用服务。
+ */
 @Slf4j
 @Service
 public class ConversationMessageRefGraphService extends ServiceImpl<ConversationMessageRefGraphMapper, ConversationMessageRefGraph> {
 
+    /**
+     * 根据消息 UUID 获取图谱引用信息。
+     *
+     * @param messageUuid 消息 UUID
+     * @return 图谱引用 DTO
+     */
     public RefGraphDto getByMsgUuid(String messageUuid) {
         List<ConversationMessageRefGraph> list = this.getBaseMapper().listByMsgUuid(messageUuid);
         if (list.isEmpty()) {

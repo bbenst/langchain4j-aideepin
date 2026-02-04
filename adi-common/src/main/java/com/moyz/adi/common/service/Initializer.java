@@ -18,47 +18,92 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+/**
+ * 系统启动初始化服务。
+ */
 @Slf4j
 @Service
 public class Initializer {
 
+    /**
+     * 图片存储路径。
+     */
     @Value("${local.images}")
     private String imagePath;
+    /**
+     * 临时图片路径。
+     */
     @Value("${local.tmp-images}")
     private String tmpImagePath;
+    /**
+     * 缩略图路径。
+     */
     @Value("${local.thumbnails}")
     private String thumbnailsPath;
+    /**
+     * 文件存储路径。
+     */
     @Value("${local.files}")
     private String filePath;
+    /**
+     * 对话记忆存储路径。
+     */
     @Value("${local.chat-memory}")
     private String chatMemoryPath;
+    /**
+     * 应用配置属性。
+     */
     @Resource
     private AdiProperties adiProperties;
+    /**
+     * 模型服务。
+     */
     @Resource
     private AiModelService aiModelService;
+    /**
+     * 系统配置服务。
+     */
     @Resource
     private SysConfigService sysConfigService;
+    /**
+     * 阿里云 OSS 文件助手。
+     */
     @Resource
     private AliyunOssFileHelper aliyunOssFileHelper;
 
+    /**
+     * 知识库图存储。
+     */
     @Lazy
     @Resource
     private GraphStore kbGraphStore;
+    /**
+     * 知识库向量存储。
+     */
     @Lazy
     @Resource
     private EmbeddingStore<TextSegment> kbEmbeddingStore;
+    /**
+     * 对话记忆向量存储。
+     */
     @Lazy
     @Resource
     private EmbeddingStore<TextSegment> convMemoryEmbeddingStore;
+    /**
+     * AI 搜索向量存储。
+     */
     @Lazy
     @Resource
     private EmbeddingStore<TextSegment> aiSearchEmbeddingStore;
+    /**
+     * 向量模型。
+     */
     @Lazy
     @Resource
     private EmbeddingModel embeddingModel;
 
     /**
-     * 应用初始化
+     * 应用初始化。
      */
     @PostConstruct
     public void init() {
@@ -80,13 +125,16 @@ public class Initializer {
     }
 
     /**
-     * 10分钟重刷一次配置信息
+     * 每 10 分钟刷新一次配置信息。
      */
     @Scheduled(initialDelay = 10 * 60 * 1000, fixedDelay = 10 * 60 * 1000)
     public void reloadConfig() {
         sysConfigService.loadAndCache();
     }
 
+    /**
+     * 初始化文件存储与目录结构。
+     */
     public void checkAndInitFileOperator() {
         log.info("Initializing file operator...");
         LocalFileOperator.checkAndCreateDir(imagePath);

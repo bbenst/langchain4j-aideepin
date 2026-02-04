@@ -22,10 +22,16 @@ import java.text.MessageFormat;
 
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 
+/**
+ * 基于 Token 的请求鉴权过滤器。
+ */
 @Slf4j
 @Component
 public class TokenFilter extends OncePerRequestFilter {
 
+    /**
+     * 允许匿名访问的接口前缀。
+     */
     protected static final String[] EXCLUDE_API = {
             "/auth/",
             "/model/",
@@ -39,6 +45,9 @@ public class TokenFilter extends OncePerRequestFilter {
             "/sys/config/public/",
     };
 
+    /**
+     * 从请求参数中读取 Token 的接口前缀。
+     */
     protected static final String[] TOKEN_IN_PARAMS = {
             "/my-image/",
             "/my-thumbnail/",
@@ -46,12 +55,27 @@ public class TokenFilter extends OncePerRequestFilter {
             "/file/"
     };
 
+    /**
+     * Redis 操作模板，用于读取用户会话信息。
+     */
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
+    /**
+     * 应用上下文路径。
+     */
     @Value("${server.servlet.context-path:}")
     private String contextPath;
 
+    /**
+     * 执行鉴权过滤逻辑。
+     *
+     * @param request 请求
+     * @param response 响应
+     * @param filterChain 过滤链
+     * @throws ServletException Servlet 异常
+     * @throws IOException IO 异常
+     */
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         String requestUri = request.getRequestURI();
@@ -102,6 +126,12 @@ public class TokenFilter extends OncePerRequestFilter {
         }
     }
 
+    /**
+     * 判断是否为免鉴权路径。
+     *
+     * @param requestUri 请求路径
+     * @return 是否免鉴权
+     */
     private boolean excludePath(String requestUri) {
         for (String path : EXCLUDE_API) {
             if (requestUri.startsWith(contextPath + path)) {
@@ -116,6 +146,12 @@ public class TokenFilter extends OncePerRequestFilter {
         return false;
     }
 
+    /**
+     * 判断是否允许从请求参数读取 Token。
+     *
+     * @param requestUri 请求路径
+     * @return 是否允许
+     */
     private boolean checkPathWithToken(String requestUri) {
         for (String path : TOKEN_IN_PARAMS) {
             if (requestUri.startsWith(contextPath + path)) {

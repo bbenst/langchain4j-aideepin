@@ -45,13 +45,24 @@ import org.springframework.web.client.RestTemplate;
 import javax.sql.DataSource;
 import java.util.UUID;
 
+/**
+ * Spring Bean 配置类。
+ */
 @Slf4j
 @Configuration
 public class BeanConfig {
 
+    /**
+     * 应用配置属性。
+     */
     @Resource
     private AdiProperties adiProperties;
 
+    /**
+     * 构建 RestTemplate。
+     *
+     * @return RestTemplate 实例
+     */
     @Bean
     public RestTemplate restTemplate() {
         log.info("Configuration:create restTemplate");
@@ -68,6 +79,11 @@ public class BeanConfig {
         return restTemplate;
     }
 
+    /**
+     * 构建全局 ObjectMapper。
+     *
+     * @return ObjectMapper 实例
+     */
     @Bean
     @Primary
     public ObjectMapper objectMapper() {
@@ -79,6 +95,11 @@ public class BeanConfig {
         return objectMapper;
     }
 
+    /**
+     * 主线程池执行器。
+     *
+     * @return 异步执行器
+     */
     @Bean(name = "mainExecutor")
     @Primary
     public AsyncTaskExecutor mainExecutor() {
@@ -90,6 +111,11 @@ public class BeanConfig {
         return executor;
     }
 
+    /**
+     * 图片相关任务线程池执行器。
+     *
+     * @return 异步执行器
+     */
     @Bean(name = "imagesExecutor")
     public AsyncTaskExecutor imagesExecutor() {
         int processorsNum = Runtime.getRuntime().availableProcessors();
@@ -100,6 +126,13 @@ public class BeanConfig {
         return executor;
     }
 
+    /**
+     * 构建 MyBatis SqlSessionFactory 并注册拦截器与类型处理器。
+     *
+     * @param dataSource 数据源
+     * @return SqlSessionFactory 实例
+     * @throws Exception 初始化异常
+     */
     @Bean
     @Primary
     public SqlSessionFactory sqlSessionFactory(DataSource dataSource)
@@ -133,9 +166,9 @@ public class BeanConfig {
     }
 
     /**
-     * 初始化EmbeddingModel(单例),根据配置的embeddingModel选择不同的实现
+     * 初始化 EmbeddingModel（单例），根据配置选择不同实现。
      *
-     * @return EmbeddingModel实例
+     * @return EmbeddingModel 实例
      */
     @Bean
     @DependsOn("initializer")
@@ -164,6 +197,11 @@ public class BeanConfig {
 //        return ragService;
 //    }
 
+    /**
+     * Bean 校验器。
+     *
+     * @return 校验器实例
+     */
     @Bean(name = "beanValidator")
     public LocalValidatorFactoryBean validator() {
         return new LocalValidatorFactoryBean();

@@ -38,23 +38,60 @@ import static dev.langchain4j.internal.ValidationUtils.*;
 import static dev.langchain4j.internal.ValidationUtils.ensureNotNull;
 import static org.neo4j.cypherdsl.core.Cypher.*;
 
+/**
+ * 基于 Neo4j 的图谱存储实现。
+ */
 public class Neo4jGraphStore implements GraphStore {
+    /**
+     * 日志记录器。
+     */
     private static final Logger log = LoggerFactory.getLogger(Neo4jGraphStore.class);
 
+    /**
+     * Neo4j 主机地址。
+     */
     private final String host;
 
+    /**
+     * Neo4j 端口。
+     */
     private final Integer port;
 
+    /**
+     * 访问用户名。
+     */
     private final String user;
 
+    /**
+     * 访问密码。
+     */
     private final String password;
 
+    /**
+     * 图谱标签名称。
+     */
     private final String graphName;
 
+    /**
+     * Neo4j 驱动。
+     */
     private final Driver driver;
 
+    /**
+     * 读取用图谱封装。
+     */
     private final Neo4jGraph neo4jGraph;
 
+    /**
+     * 构建 Neo4j 图谱存储。
+     *
+     * @param host 主机地址
+     * @param port 端口
+     * @param user 用户名
+     * @param password 密码
+     * @param graphName 图谱标签名称
+     * @param dropGraphFirst 是否先清空图谱
+     */
     @Builder
     public Neo4jGraphStore(String host,
                            Integer port,
@@ -78,6 +115,12 @@ public class Neo4jGraphStore implements GraphStore {
         }
     }
 
+    /**
+     * 批量新增顶点。
+     *
+     * @param vertexes 顶点列表
+     * @return 是否新增成功
+     */
     @Override
     public boolean addVertexes(List<GraphVertex> vertexes) {
         ensureNotEmpty(vertexes, vertexes.toString());
@@ -111,6 +154,12 @@ public class Neo4jGraphStore implements GraphStore {
         return true;
     }
 
+    /**
+     * 新增单个顶点。
+     *
+     * @param vertex 顶点
+     * @return 是否新增成功
+     */
     @Override
     public boolean addVertex(GraphVertex vertex) {
         log.info("Add vertex:{}", vertex);
@@ -119,6 +168,12 @@ public class Neo4jGraphStore implements GraphStore {
         return addVertexes(List.of(vertex));
     }
 
+    /**
+     * 更新顶点信息。
+     *
+     * @param updateInfo 更新信息
+     * @return 更新后的顶点
+     */
     @Override
     public GraphVertex updateVertex(GraphVertexUpdateInfo updateInfo) {
         log.info("Update vertex:{}", updateInfo.getNewData());
@@ -164,6 +219,12 @@ public class Neo4jGraphStore implements GraphStore {
         }
     }
 
+    /**
+     * 获取单个顶点。
+     *
+     * @param search 查询条件
+     * @return 顶点信息
+     */
     @Override
     public GraphVertex getVertex(GraphVertexSearch search) {
         List<GraphVertex> list = this.searchVertices(search);
@@ -173,6 +234,12 @@ public class Neo4jGraphStore implements GraphStore {
         return list.get(0);
     }
 
+    /**
+     * 批量获取顶点。
+     *
+     * @param ids 顶点 ID 列表
+     * @return 顶点列表
+     */
     @Override
     public List<GraphVertex> getVertices(List<String> ids) {
         String query = """
@@ -185,6 +252,12 @@ public class Neo4jGraphStore implements GraphStore {
         return getVerticesFromResultSet(records);
     }
 
+    /**
+     * 搜索顶点。
+     *
+     * @param search 查询条件
+     * @return 顶点列表
+     */
     @Override
     public List<GraphVertex> searchVertices(GraphVertexSearch search) {
         String label = search.getLabel();
@@ -213,6 +286,12 @@ public class Neo4jGraphStore implements GraphStore {
         }
     }
 
+    /**
+     * 批量获取边及两端顶点。
+     *
+     * @param ids 边 ID 列表
+     * @return 边与顶点三元组列表
+     */
     @Override
     public List<Triple<GraphVertex, GraphEdge, GraphVertex>> getEdges(List<String> ids) {
         String query = """
@@ -225,6 +304,12 @@ public class Neo4jGraphStore implements GraphStore {
         return getEdgesFromResultSet(records);
     }
 
+    /**
+     * 搜索边及两端顶点。
+     *
+     * @param search 查询条件
+     * @return 边与顶点三元组列表
+     */
     @Override
     public List<Triple<GraphVertex, GraphEdge, GraphVertex>> searchEdges(GraphEdgeSearch search) {
         log.info("searchEdges:{}", search);
@@ -299,6 +384,12 @@ public class Neo4jGraphStore implements GraphStore {
         }
     }
 
+    /**
+     * 获取单条边及两端顶点。
+     *
+     * @param search 查询条件
+     * @return 边与顶点三元组
+     */
     public Triple<GraphVertex, GraphEdge, GraphVertex> getEdge(GraphEdgeSearch search) {
         List<Triple<GraphVertex, GraphEdge, GraphVertex>> list = this.searchEdges(search);
         if (list.isEmpty()) {
@@ -307,6 +398,12 @@ public class Neo4jGraphStore implements GraphStore {
         return list.get(0);
     }
 
+    /**
+     * 新增边并返回完整信息。
+     *
+     * @param addInfo 新增信息
+     * @return 边与顶点三元组
+     */
     public Triple<GraphVertex, GraphEdge, GraphVertex> addEdge(GraphEdgeAddInfo addInfo) {
         ensureNotNull(addInfo.getEdge(), "Grahp edge");
         try (Session session = driver.session()) {
@@ -352,6 +449,12 @@ public class Neo4jGraphStore implements GraphStore {
         }
     }
 
+    /**
+     * 更新边并返回完整信息。
+     *
+     * @param edgeEditInfo 编辑信息
+     * @return 边与顶点三元组
+     */
     public Triple<GraphVertex, GraphEdge, GraphVertex> updateEdge(GraphEdgeEditInfo edgeEditInfo) {
         log.info("Update edge:{}", edgeEditInfo);
         GraphEdge newData = edgeEditInfo.getEdge();
@@ -400,10 +503,10 @@ public class Neo4jGraphStore implements GraphStore {
     }
 
     /**
-     * 删除顶点(以及边)
+     * 删除顶点（可选删除关联边）。
      *
-     * @param filter
-     * @param includeEdges
+     * @param filter 过滤条件
+     * @param includeEdges 是否包含边
      */
     public void deleteVertices(GraphSearchCondition filter, boolean includeEdges) {
         ensureNotNull(filter, "Data filter");
@@ -437,9 +540,9 @@ public class Neo4jGraphStore implements GraphStore {
     }
 
     /**
-     * 单独删除边
+     * 单独删除边。
      *
-     * @param filter
+     * @param filter 过滤条件
      */
     public void deleteEdges(GraphSearchCondition filter) {
         ensureNotNull(filter, "Data filter");
@@ -468,6 +571,12 @@ public class Neo4jGraphStore implements GraphStore {
         }
     }
 
+    /**
+     * 将结果集转换为边与顶点三元组列表。
+     *
+     * @param records 结果集
+     * @return 三元组列表
+     */
     private List<Triple<GraphVertex, GraphEdge, GraphVertex>> getEdgesFromResultSet(List<Record> records) {
         List<Triple<GraphVertex, GraphEdge, GraphVertex>> result = new ArrayList<>();
         for (Record record : records) {
@@ -479,6 +588,12 @@ public class Neo4jGraphStore implements GraphStore {
         return result;
     }
 
+    /**
+     * 获取单个边的结果。
+     *
+     * @param records 结果集
+     * @return 边与顶点三元组
+     */
     public Triple<GraphVertex, GraphEdge, GraphVertex> getEdgeFromResultSet(List<Record> records) {
         List<Triple<GraphVertex, GraphEdge, GraphVertex>> list = getEdgesFromResultSet(records);
         if (list.isEmpty()) {
@@ -487,6 +602,12 @@ public class Neo4jGraphStore implements GraphStore {
         return list.get(0);
     }
 
+    /**
+     * 获取单个顶点的结果。
+     *
+     * @param records 结果集
+     * @return 顶点
+     */
     public GraphVertex getVertexFromResultSet(List<Record> records) {
         List<GraphVertex> vertices = getVerticesFromResultSet(records);
         if (vertices.isEmpty()) {
@@ -495,6 +616,12 @@ public class Neo4jGraphStore implements GraphStore {
         return vertices.get(0);
     }
 
+    /**
+     * 将结果集转换为顶点列表。
+     *
+     * @param records 结果集
+     * @return 顶点列表
+     */
     public List<GraphVertex> getVerticesFromResultSet(List<Record> records) {
         List<GraphVertex> vertices = new ArrayList<>();
         for (Record record : records) {
@@ -503,6 +630,12 @@ public class Neo4jGraphStore implements GraphStore {
         return vertices;
     }
 
+    /**
+     * 将 Neo4j 节点转换为 GraphVertex。
+     *
+     * @param node 节点
+     * @return 顶点对象
+     */
     public GraphVertex agTypeToVertex(Node node) {
         String label = node.get("label").toString();
         Map<String, Object> metadata = new HashMap<>();
@@ -530,6 +663,14 @@ public class Neo4jGraphStore implements GraphStore {
                 .build();
     }
 
+    /**
+     * 将 Neo4j 关系转换为 GraphEdge。
+     *
+     * @param sourceNode 源节点
+     * @param relationship 关系
+     * @param targetNode 目标节点
+     * @return 边对象
+     */
     private GraphEdge agTypeToEdge(Node sourceNode, Relationship relationship, Node targetNode) {
         String startId = sourceNode.elementId();
         String endId = targetNode.elementId();
@@ -561,6 +702,14 @@ public class Neo4jGraphStore implements GraphStore {
                 .build();
     }
 
+    /**
+     * 根据元数据构建 Cypher 片段与参数。
+     *
+     * @param metadata 元数据
+     * @param alias 别名
+     * @param createCause 是否创建语句片段
+     * @return 语句片段与参数
+     */
     private Pair<String, Map<String, Object>> buildCauseByMetadata(Map<String, Object> metadata, String alias, boolean createCause) {
         String keyValueOperator = createCause ? ":" : "=";
 
@@ -577,6 +726,13 @@ public class Neo4jGraphStore implements GraphStore {
         return new ImmutablePair<>(String.join(",", itemQuerySql), argNameToVal);
     }
 
+    /**
+     * 根据元数据构建 Cypher 片段与参数。
+     *
+     * @param metadata 元数据
+     * @param createCause 是否创建语句片段
+     * @return 语句片段与参数
+     */
     private Pair<String, Map<String, Object>> buildCauseByMetadata(Map<String, Object> metadata, boolean createCause) {
         return buildCauseByMetadata(metadata, "", createCause);
     }
@@ -602,6 +758,14 @@ public class Neo4jGraphStore implements GraphStore {
 //        return new ImmutablePair<>(whereCause.toString(), whereArgs);
 //    }
 
+    /**
+     * 构建 name 条件片段。
+     *
+     * @param names 名称列表
+     * @param whereClause 条件片段
+     * @param whereArgs 参数映射
+     * @param alias 别名
+     */
     private void buildNamesClause(List<String> names, StringBuilder whereClause, Map<String, Object> whereArgs, String alias) {
         if (names.isEmpty()) {
             return;
@@ -615,6 +779,12 @@ public class Neo4jGraphStore implements GraphStore {
         whereClause.append(String.format("(%s.name in [%s])", alias, String.join(",", nameArgs)));
     }
 
+    /**
+     * 拼接 SQL 片段。
+     *
+     * @param filterClause 过滤条件
+     * @param sqlAndArgs SQL 片段与参数
+     */
     private void appendSql(StringBuilder filterClause, Pair<String, Map<String, Object>> sqlAndArgs) {
         if (null == sqlAndArgs) {
             return;

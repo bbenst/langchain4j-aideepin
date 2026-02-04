@@ -29,28 +29,56 @@ import java.util.Optional;
 import static com.moyz.adi.common.enums.ErrorEnum.A_AI_IMAGE_NO_AUTH;
 import static com.moyz.adi.common.enums.ErrorEnum.A_FILE_NOT_EXIST;
 
+/**
+ * 文件与图片存储服务。
+ */
 @Slf4j
 @Service
 public class FileService extends ServiceImpl<FileMapper, AdiFile> {
 
+    /**
+     * 图片存储根路径。
+     */
     @Value("${local.images}")
     private String imagePath;
 
+    /**
+     * 图片水印存储路径。
+     */
     @Value("${local.watermark-images}")
     private String watermarkImagesPath;
 
+    /**
+     * 图片缩略图存储路径。
+     */
     @Value("${local.thumbnails}")
     private String thumbnailsPath;
 
+    /**
+     * 水印缩略图存储路径。
+     */
     @Value("${local.watermark-thumbnails}")
     private String watermarkThumbnailsPath;
 
+    /**
+     * 文件存储根路径。
+     */
     @Value("${local.files}")
     private String filePath;
 
+    /**
+     * 临时图片存储路径。
+     */
     @Value("${local.tmp-images}")
     private String tmpImagesPath;
 
+    /**
+     * 保存上传文件，若已存在则复用记录。
+     *
+     * @param file  上传文件
+     * @param image 是否为图片
+     * @return 文件记录
+     */
     public AdiFile saveFile(MultipartFile file, boolean image) {
         String sha256 = HashUtil.sha256(file);
         Optional<AdiFile> existFile = this.lambdaQuery()
@@ -82,6 +110,13 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
         return adiFile;
     }
 
+    /**
+     * 从远程图片地址保存图片。
+     *
+     * @param user           用户
+     * @param sourceImageUrl 图片地址
+     * @return 文件记录
+     */
     public AdiFile saveImageFromUrl(User user, String sourceImageUrl) {
         log.info("saveImageFromUrl,sourceImageUrl:{}", sourceImageUrl);
         String uuid = UuidUtil.createShort();
@@ -98,6 +133,13 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
         return adiFile;
     }
 
+    /**
+     * 从本地路径保存文件记录。
+     *
+     * @param user      用户
+     * @param pathOrUrl 本地路径或地址
+     * @return 文件记录
+     */
     public AdiFile saveFromPath(User user, String pathOrUrl) {
         log.info("saveImageFromPath,path:{}", pathOrUrl);
         Pair<String, String> nameAndExt = LocalFileUtil.getNameAndExt(pathOrUrl);
@@ -114,6 +156,12 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
         return adiFile;
     }
 
+    /**
+     * 软删除文件记录。
+     *
+     * @param uuid 文件 UUID
+     * @return 是否更新成功
+     */
     public boolean softDel(String uuid) {
         return this.lambdaUpdate()
                 .eq(AdiFile::getUserId, ThreadContext.getCurrentUserId())
@@ -122,6 +170,12 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
                 .update();
     }
 
+    /**
+     * 删除文件实体并软删除记录。
+     *
+     * @param uuid 文件 UUID
+     * @return 是否删除成功
+     */
     public boolean removeFileAndSoftDel(String uuid) {
         AdiFile adiFile = this.lambdaQuery()
                 .eq(AdiFile::getUserId, ThreadContext.getCurrentUserId())
@@ -135,6 +189,12 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
         return this.softDel(uuid);
     }
 
+    /**
+     * 按 UUID 获取当前用户的文件记录。
+     *
+     * @param uuid 文件 UUID
+     * @return 文件记录
+     */
     public AdiFile getByUuid(String uuid) {
         return this.lambdaQuery()
                 .eq(AdiFile::getUuid, uuid)
@@ -143,10 +203,10 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
     }
 
     /**
-     * 读取图片到BufferedImage，管理员或图片拥有者才有权限查看
+     * 读取图片到 BufferedImage，管理员或图片拥有者才有权限查看。
      *
-     * @param uuid      图片uuid
-     * @param thumbnail 读取的是缩略图
+     * @param uuid      图片 UUID
+     * @param thumbnail 是否读取缩略图
      * @return 图片内容
      */
     public BufferedImage readMyImage(String uuid, boolean thumbnail) {
@@ -163,6 +223,13 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
         return LocalFileUtil.readLocalImage(adiFile, thumbnail, thumbnailsPath);
     }
 
+    /**
+     * 读取图片，不做用户权限校验。
+     *
+     * @param uuid      图片 UUID
+     * @param thumbnail 是否读取缩略图
+     * @return 图片内容
+     */
     public BufferedImage readImage(String uuid, boolean thumbnail) {
         AdiFile adiFile = this.lambdaQuery()
                 .eq(AdiFile::getUuid, uuid)
@@ -173,6 +240,12 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
         return LocalFileUtil.readLocalImage(adiFile, thumbnail, thumbnailsPath);
     }
 
+    /**
+     * 获取图片存储路径。
+     *
+     * @param uuid 图片 UUID
+     * @return 图片路径
+     */
     public String getImagePath(String uuid) {
         AdiFile adiFile = this.lambdaQuery()
                 .eq(AdiFile::getUuid, uuid)
@@ -184,6 +257,12 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
     }
 
 
+    /**
+     * 获取文件记录。
+     *
+     * @param uuid 文件 UUID
+     * @return 文件记录
+     */
     public AdiFile getFile(String uuid) {
         AdiFile adiFile = this.lambdaQuery()
                 .eq(AdiFile::getUuid, uuid)
@@ -194,6 +273,12 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
         return adiFile;
     }
 
+    /**
+     * 获取临时图片路径。
+     *
+     * @param uuid 图片 UUID
+     * @return 临时图片路径
+     */
     public String getTmpImagesPath(String uuid) {
         AdiFile adiFile = this.lambdaQuery()
                 .eq(AdiFile::getUuid, uuid)
@@ -204,6 +289,12 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
         return tmpImagesPath + uuid + "." + adiFile.getExt();
     }
 
+    /**
+     * 获取水印图片路径。
+     *
+     * @param uuid 图片 UUID
+     * @return 水印图片路径
+     */
     public String getWatermarkImagesPath(String uuid) {
         AdiFile adiFile = this.lambdaQuery()
                 .eq(AdiFile::getUuid, uuid)
@@ -214,10 +305,22 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
         return watermarkImagesPath + uuid + "." + adiFile.getExt();
     }
 
+    /**
+     * 获取水印图片路径（已存在文件对象）。
+     *
+     * @param adiFile 文件对象
+     * @return 水印图片路径
+     */
     public String getWatermarkImagesPath(AdiFile adiFile) {
         return watermarkImagesPath + adiFile.getUuid() + "." + adiFile.getExt();
     }
 
+    /**
+     * 获取单个文件 URL。
+     *
+     * @param fileUuid 文件 UUID
+     * @return 文件 URL
+     */
     public String getUrl(String fileUuid) {
         if (StringUtils.isBlank(fileUuid)) {
             return null;
@@ -230,10 +333,10 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
     }
 
     /**
-     * 获取文件url
+     * 获取文件 URL 列表。
      *
-     * @param fileUuids 文件uuid
-     * @return 文件url
+     * @param fileUuids 文件 UUID 列表
+     * @return 文件 URL 列表
      */
     public List<String> getUrls(List<String> fileUuids) {
         if (CollectionUtils.isEmpty(fileUuids)) {

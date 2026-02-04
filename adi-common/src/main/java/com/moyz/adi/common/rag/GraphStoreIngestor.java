@@ -33,28 +33,57 @@ import static dev.langchain4j.internal.ValidationUtils.ensureNotNull;
 import static dev.langchain4j.spi.ServiceHelper.loadFactories;
 import static java.util.Collections.singletonList;
 
+/**
+ * 图谱入库器，将文档切分、抽取并写入图谱存储。
+ */
 @Builder
 @AllArgsConstructor
 @Slf4j
 public class GraphStoreIngestor {
 
+    /**
+     * 文档转换器，用于入库前预处理。
+     */
     private final DocumentTransformer documentTransformer;
+    /**
+     * 文本分段转换器，用于分段后处理。
+     */
     private final TextSegmentTransformer textSegmentTransformer;
+    /**
+     * 图谱存储实现。
+     */
     private final GraphStore graphStore;
+    /**
+     * 文档分段器。
+     */
     private final DocumentSplitter documentSplitter;
+    /**
+     * 分段抽取函数，返回分段、分段 ID 与抽取结果。
+     */
     private final Function<List<TextSegment>, List<Triple<TextSegment, String, String>>> segmentsFunction;
 
     /**
-     * 查询时 where 语句的条件字段名
+     * 查询时 where 语句的条件字段名。
      */
     private final List<String> identifyColumns;
 
     /**
-     * 更新时 Set 语句的追加字段名，值为数组类型<br/>
-     * 如已存在数据kb_item_uuids=['ab']，则更新时对该字段追加新数据,最终结果为kb_item_uuids=['ab','cd']
+     * 更新时 set 语句的追加字段名，值为数组类型。
+     * 如已存在数据 kb_item_uuids=['ab']，则更新时对该字段追加新数据，最终结果为 kb_item_uuids=['ab','cd']。
      */
     private final List<String> appendColumns;
 
+    /**
+     * 构建图谱入库器。
+     *
+     * @param documentTransformer 文档转换器
+     * @param documentSplitter 文档分段器
+     * @param graphStore 图谱存储实现
+     * @param textSegmentTransformer 文本分段转换器
+     * @param segmentsFunction 分段抽取函数
+     * @param identifyColumns 用于定位记录的字段名集合（逗号分隔）
+     * @param appendColumns 追加字段名集合（逗号分隔）
+     */
     public GraphStoreIngestor(DocumentTransformer documentTransformer,
                               DocumentSplitter documentSplitter,
                               GraphStore graphStore,
@@ -71,6 +100,11 @@ public class GraphStoreIngestor {
         this.appendColumns = Arrays.asList(appendColumns.split(","));
     }
 
+    /**
+     * 通过 SPI 加载默认文档分段器。
+     *
+     * @return 文档分段器
+     */
     private static DocumentSplitter loadDocumentSplitter() {
         Collection<DocumentSplitterFactory> factories = loadFactories(DocumentSplitterFactory.class);
         if (factories.size() > 1) {
@@ -87,10 +121,20 @@ public class GraphStoreIngestor {
         return null;
     }
 
+    /**
+     * 入库单个文档。
+     *
+     * @param document 文档
+     */
     public void ingest(Document document) {
         ingest(singletonList(document));
     }
 
+    /**
+     * 入库文档列表。
+     *
+     * @param documents 文档列表
+     */
     public void ingest(List<Document> documents) {
 
         log.info("Starting to ingest {} documents", documents.size());
@@ -113,7 +157,7 @@ public class GraphStoreIngestor {
             log.info("Text segments were transformed into {} text segments", documents.size());
         }
 
-        // TODO handle failures, parallelize
+        // 待办：失败重试与并行化优化。
         log.info("Starting to extract {} text segments", segments.size());
         List<Triple<TextSegment, String, String>> segmentIdToAiResponse = segmentsFunction.apply(segments);
         for (Triple<TextSegment, String, String> triple : segmentIdToAiResponse) {
@@ -123,7 +167,7 @@ public class GraphStoreIngestor {
             Map<String, Object> metadata = segment.metadata().toMap();
             log.info("Finished extract {} text segments", segments.size());
             log.info("graph response:{}", response);
-            // TODO handle failures, parallelize
+            // 待办：失败重试与并行化优化。
             log.info("Starting to store {} text segments into the graph store", segments.size());
             if (StringUtils.isBlank(response)) {
                 log.warn("Response is empty");
@@ -146,6 +190,7 @@ public class GraphStoreIngestor {
                 throw new BaseException(ErrorEnum.B_GRAPH_FILTER_NOT_FOUND);
             }
 
+            // 抽取结果为多行记录，需逐条解析后写入图谱。
             String[] rows = StringUtils.split(response, AdiConstant.GRAPH_RECORD_DELIMITER);
             for (String row : rows) {
                 String graphRow = row;
@@ -156,7 +201,7 @@ public class GraphStoreIngestor {
                     String entityType = AdiStringUtil.clearStr(recordAttributes[2].toUpperCase()).replaceAll("[^a-zA-Z0-9\\s\\u4E00-\\u9FA5]+", "").replace(" ", "");
                     String entityDescription = AdiStringUtil.clearStr(recordAttributes[3]);
                     log.info("entityName:{},entityType:{},entityDescription:{}", entityName, entityType, entityDescription);
-                    //实体如果不存在图数据库中，插入一个新的实体，否则追加textSegmentId、description以及metadata中指定的内容
+                    // 实体不存在则新增，存在则追加分段与描述等信息。
                     List<GraphVertex> existVertices = graphStore.searchVertices(
                             GraphVertexSearch.builder()
                                     .label(entityType)
@@ -203,7 +248,7 @@ public class GraphStoreIngestor {
                         weight = NumberUtils.toDouble(tailRecord, 1.0);
                     }
 
-                    //Source vertex
+                    // 源节点
                     GraphVertex source = graphStore.getVertex(
                             GraphVertexSearch.builder()
                                     .names(List.of(sourceName))
@@ -219,7 +264,7 @@ public class GraphStoreIngestor {
                                         .build()
                         );
                     }
-                    //Target vertex
+                    // 目标节点
                     GraphVertex target = graphStore.getVertex(
                             GraphVertexSearch.builder()
                                     .names(List.of(targetName))
@@ -235,7 +280,7 @@ public class GraphStoreIngestor {
                                         .build()
                         );
                     }
-                    //Edge
+                    // 边关系
                     GraphEdgeSearch search = new GraphEdgeSearch();
                     search.setSource(GraphSearchCondition.builder()
                             .names(List.of(sourceName))
@@ -267,7 +312,7 @@ public class GraphStoreIngestor {
 
                         appendExistsToNewOne(existGraphEdge.getMetadata(), metadata);
                     } else {
-                        //检查sourceName的节点是否存在，不存在则创建
+                        // 检查节点是否存在，不存在则创建。
                         checkOrCreateVertex("", sourceName, chunkId, filter, metadata);
                         checkOrCreateVertex("", targetName, chunkId, filter, metadata);
                         GraphEdgeAddInfo addInfo = new GraphEdgeAddInfo();
@@ -297,11 +342,12 @@ public class GraphStoreIngestor {
     }
 
     /**
-     * metadata记录的值为Map，如：kb_uuid=>123,kb_item_uuid=>22222,3333，其中类似 3333 的值是追加的，超过最大限度时丢弃最早的数据
-     * TODO 重构以记录所有追加的值
+     * metadata 记录的值为 Map，如：kb_uuid=>123,kb_item_uuid=>22222,3333，其中类似 3333 的值是追加的，
+     * 超过最大限度时丢弃最早的数据。
+     * 待办：重构以记录所有追加的值。
      *
-     * @param existMetadata 已存在的metadata
-     * @param newMetadata   新的metadata
+     * @param existMetadata 已存在的 metadata
+     * @param newMetadata 新的 metadata
      */
     private void appendExistsToNewOne(Map<String, Object> existMetadata, Map<String, Object> newMetadata) {
         for (String columnName : appendColumns) {
@@ -314,21 +360,36 @@ public class GraphStoreIngestor {
         }
     }
 
+    /**
+     * 当追加值过长时移除最早的数据，保证长度不超过上限。
+     *
+     * @param cleanedTxt 清洗后的文本
+     * @return 处理后的文本
+     */
     private String checkAndRemoveOldest(String cleanedTxt) {
         if (StringUtils.isBlank(cleanedTxt)) {
             return cleanedTxt;
         }
         String result = cleanedTxt;
         while (result.length() > MAX_METADATA_VALUE_LENGTH) {
-            String[] existValues = result.split(",", 2); // Only split into 2 parts
+            String[] existValues = result.split(",", 2); // 仅拆分为两部分，保留后续所有内容。
             if (existValues.length <= 1) {
                 return result.substring(0, MAX_METADATA_VALUE_LENGTH);
             }
-            result = existValues[1]; // Take everything after the first comma
+            result = existValues[1]; // 保留第一个逗号后的内容。
         }
         return result;
     }
 
+    /**
+     * 检查节点是否存在，不存在则创建。
+     *
+     * @param label 节点标签
+     * @param name 节点名称
+     * @param textSegmentId 分段 ID
+     * @param metadataFilter 元数据过滤条件
+     * @param metadata 元数据
+     */
     private void checkOrCreateVertex(String label, String name, String textSegmentId, Filter metadataFilter, Map<String, Object> metadata) {
         List<GraphVertex> existVertices = graphStore.searchVertices(
                 GraphVertexSearch.builder()

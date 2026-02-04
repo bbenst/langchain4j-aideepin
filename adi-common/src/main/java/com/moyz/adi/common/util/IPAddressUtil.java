@@ -1,11 +1,21 @@
 package com.moyz.adi.common.util;
 
 import jakarta.servlet.http.HttpServletRequest;
-
+/**
+ * 客户端 IP 获取工具类。
+ */
 public class IPAddressUtil {
 
+    /**
+     * 工具类禁止实例化。
+     */
     private IPAddressUtil(){}
-
+    /**
+     * 获取客户端真实 IP 地址。
+     *
+     * @param request 请求对象
+     * @return 客户端 IP
+     */
     public static String getClientIpAddress(HttpServletRequest request) {
         String ip = null;
         //X-Forwarded-For：Squid 服务代理

@@ -26,10 +26,17 @@ import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
-
+/**
+ * 图片处理工具类。
+ */
 @Slf4j
 public class ImageUtil {
-
+    /**
+     * 判断图片是否不是 ARGB 颜色模式。
+     *
+     * @param imagePath 图片路径
+     * @return 是否非 ARGB
+     */
     public static boolean isNotArgb(String imagePath) {
         try {
             // 读取图片
@@ -44,7 +51,12 @@ public class ImageUtil {
         }
         return false;
     }
-
+    /**
+     * 将 RGB 图片转为 RGBA 并输出到指定路径。
+     *
+     * @param rbgPath  RGB 图片路径
+     * @param argbPath RGBA 图片输出路径
+     */
     public static void rgbConvertToRgba(String rbgPath, String argbPath) {
         log.info("RGB convert to RGBA, rbgPath:{}, argbPath:{}", rbgPath, argbPath);
         try {
@@ -66,7 +78,13 @@ public class ImageUtil {
             log.error("error", e);
         }
     }
-
+    /**
+     * 将图片转为 RGBA 格式并保存，返回可用文件。
+     *
+     * @param file     原始图片文件
+     * @param rgbaPath RGBA 图片输出路径
+     * @return RGBA 文件或原文件
+     */
     public static File rgbConvertToRgba(File file, String rgbaPath) {
         try {
             BufferedImage image = ImageIO.read(file);
@@ -93,11 +111,11 @@ public class ImageUtil {
     }
 
     /**
-     * 图片地址转ImageContent
-     * 如果是本地图片则转成base64，其他网站的图片使用url
+     * 图片地址转 ImageContent。
+     * 本地图片转为 Base64，远程图片使用 URL。
      *
-     * @param imageUrls
-     * @return
+     * @param imageUrls 图片地址列表
+     * @return 图片内容列表
      */
     public static List<Content> urlsToImageContent(List<String> imageUrls) {
         if (CollectionUtils.isEmpty(imageUrls)) {
@@ -126,7 +144,16 @@ public class ImageUtil {
         }
         return result;
     }
-
+    /**
+     * 创建缩略图。
+     *
+     * @param inputFile   原图路径
+     * @param outputFile  输出路径
+     * @param thumbWidth  目标宽度
+     * @param thumbHeight 目标高度
+     * @param quality     质量参数（暂不参与处理）
+     * @throws IOException 读取或写入异常
+     */
     public static void createThumbnail(String inputFile, String outputFile, int thumbWidth, int thumbHeight, int quality) throws IOException {
         File input = new File(inputFile);
         BufferedImage image = ImageIO.read(input);
@@ -151,7 +178,12 @@ public class ImageUtil {
         File output = new File(outputFile);
         ImageIO.write(outputImage, "JPEG", output);
     }
-
+    /**
+     * 从图片生成结果中提取图片列表。
+     *
+     * @param result 图片生成结果
+     * @return 图片列表
+     */
     public static List<dev.langchain4j.data.image.Image> imagesFrom(ImageSynthesisResult result) {
         return Optional.of(result)
                 .map(ImageSynthesisResult::getOutput)
@@ -162,7 +194,14 @@ public class ImageUtil {
                 .map(url -> dev.langchain4j.data.image.Image.builder().url(url).build())
                 .collect(Collectors.toList());
     }
-
+    /**
+     * 获取图片可访问 URL。
+     *
+     * @param image  图片对象
+     * @param model  模型名称
+     * @param apiKey API Key
+     * @return 图片 URL
+     */
     public static String imageUrl(dev.langchain4j.data.image.Image image, String model, String apiKey) {
         String imageUrl;
 
@@ -181,12 +220,18 @@ public class ImageUtil {
 
         return imageUrl;
     }
-
+    /**
+     * 将 Base64 数据保存为临时文件并返回路径。
+     *
+     * @param base64Data Base64 数据
+     * @param mimeType   MIME 类型
+     * @return 临时文件路径
+     */
     public static String saveDataAsTemporaryFile(String base64Data, String mimeType) {
         String tmpDir = System.getProperty("java.io.tmpdir", "/tmp");
         String tmpFileName = UUID.randomUUID().toString();
         if (Utils.isNotNullOrBlank(mimeType)) {
-            // e.g. "image/png", "image/jpeg"...
+            // 例如 "image/png", "image/jpeg"...
             int lastSlashIndex = mimeType.lastIndexOf("/");
             if (lastSlashIndex >= 0 && lastSlashIndex < mimeType.length() - 1) {
                 String fileSuffix = mimeType.substring(lastSlashIndex + 1);
@@ -203,7 +248,12 @@ public class ImageUtil {
         }
         return tmpFilePath.toAbsolutePath().toString();
     }
-
+    /**
+     * 判断文件扩展名是否为图片类型。
+     *
+     * @param fileExt 文件扩展名
+     * @return 是否为图片
+     */
     public static boolean isImage(String fileExt) {
         List<String> imageExtensions = Arrays.asList("jpg", "jpeg", "png", "gif", "bmp", "webp");
         return imageExtensions.contains(fileExt.toLowerCase());

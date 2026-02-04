@@ -13,9 +13,21 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
+/**
+ * RestTemplate 客户端请求日志拦截器。
+ */
 @Slf4j
 public class LogClientHttpRequestInterceptor implements ClientHttpRequestInterceptor {
 
+    /**
+     * 记录请求与响应信息。
+     *
+     * @param request 请求
+     * @param body 请求体
+     * @param execution 执行器
+     * @return 响应
+     * @throws IOException IO 异常
+     */
     @Override
     public ClientHttpResponse intercept(HttpRequest request, byte[] body,
                                         ClientHttpRequestExecution execution) throws IOException {
@@ -44,6 +56,5 @@ public class LogClientHttpRequestInterceptor implements ClientHttpRequestInterce
                 request.getURI(), new String(body, StandardCharsets.UTF_8), resBody);
         return response;
     }
-
 
 }

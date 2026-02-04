@@ -10,29 +10,39 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
-
 /**
- * copy from com.baomidou.mybatisplus.core.toolkit.AES
+ * AES 加解密工具类（参考 com.baomidou.mybatisplus.core.toolkit.AES）。
  */
 public class AesUtil {
-
+    /**
+     * 默认 AES 密钥。
+     */
     public static String AES_KEY = "";
-
+    /**
+     * 使用默认密钥加密字符串。
+     *
+     * @param data 明文内容
+     * @return Base64 密文
+     */
     public static String encrypt(String data) {
         return encrypt(data, AES_KEY);
     }
-
-
+    /**
+     * 使用默认密钥解密字符串。
+     *
+     * @param data Base64 密文
+     * @return 明文内容
+     */
     public static String decrypt(String data) {
         return decrypt(data, AES_KEY);
     }
 
     /**
-     * 加密
+     * 加密字节数组。
      *
-     * @param data 需要加密的内容
-     * @param key  加密密码
-     * @return
+     * @param data 明文字节
+     * @param key  密钥字节
+     * @return 密文字节
      */
     public static byte[] encrypt(byte[] data, byte[] key) {
         try {
@@ -48,11 +58,11 @@ public class AesUtil {
     }
 
     /**
-     * 解密
+     * 解密字节数组。
      *
-     * @param data 待解密内容
-     * @param key  解密密钥
-     * @return
+     * @param data 密文字节
+     * @param key  密钥字节
+     * @return 明文字节
      */
     public static byte[] decrypt(byte[] data, byte[] key) {
         try {
@@ -68,11 +78,11 @@ public class AesUtil {
     }
 
     /**
-     * 加密
+     * 加密字符串。
      *
-     * @param data 需要加密的内容
-     * @param key  加密密码
-     * @return
+     * @param data 明文内容
+     * @param key  密钥
+     * @return Base64 密文
      */
     public static String encrypt(String data, String key) {
         byte[] valueByte = encrypt(data.getBytes(StandardCharsets.UTF_8), key.getBytes(StandardCharsets.UTF_8));
@@ -80,11 +90,11 @@ public class AesUtil {
     }
 
     /**
-     * 解密
+     * 解密字符串。
      *
-     * @param data 待解密内容 base64 字符串
-     * @param key  解密密钥
-     * @return
+     * @param data Base64 密文
+     * @param key  密钥
+     * @return 明文内容
      */
     public static String decrypt(String data, String key) {
         byte[] originalData = Base64.getDecoder().decode(data.getBytes());
@@ -93,10 +103,9 @@ public class AesUtil {
     }
 
     /**
-     * 生成一个随机字符串密钥
+     * 生成随机字符串密钥。
      *
-     * @return
-     * @throws NoSuchAlgorithmException
+     * @return 16 位密钥字符串
      */
     public static String generateRandomKey() {
         return IdWorker.get32UUID().substring(0, 16);
