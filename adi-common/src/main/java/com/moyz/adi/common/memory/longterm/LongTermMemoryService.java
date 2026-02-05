@@ -47,14 +47,32 @@ import static com.moyz.adi.common.cosntant.AdiConstant.RESPONSE_FORMAT_TYPE_JSON
 @Service
 public class LongTermMemoryService {
 
+    /**
+     * 会话长期记忆向量存储。
+     */
     @Resource
     private EmbeddingStore<TextSegment> convMemoryEmbeddingStore;
+    /**
+     * 向量模型，用于文本向量化。
+     */
     @Resource
     private EmbeddingModel embeddingModel;
 
+    /**
+     * 异步抽取事实并写入长期记忆。
+     *
+     * @param convId           会话 ID
+     * @param modelPlatform    模型平台
+     * @param modelName        模型名称
+     * @param userMessage      用户消息
+     * @param assistantMessage 助手消息
+     * @return 无
+     * @throws @BaseException 模型不可用或配置异常时抛出异常
+     */
     @Async
     public void asyncAdd(Long convId, String modelPlatform, String modelName, String userMessage, String assistantMessage) {
         log.info("将信息转为记忆，convId: {}", convId);
+        // 将对话拼装为结构化输入，便于事实抽取
         String inputMessage = toInputMessage(userMessage, assistantMessage);
         log.info("inputMessage: {}", inputMessage);
         AbstractLLMService llmService = LLMContext.getServiceOrDefault(modelPlatform, modelName);
@@ -72,12 +90,13 @@ public class LongTermMemoryService {
         log.info("request:{}", sseAskParams);
         ChatResponse response = llmService.chat(sseAskParams);
         log.info("Fact extraction response: {}", response.aiMessage().text());
+        // 去除代码块包装，避免 JSON 解析失败
         String factResponse = AdiStringUtil.removeCodeBlock(response.aiMessage().text());
         if (StringUtils.isBlank(factResponse)) {
             log.warn("无法针对本次内容整理出事实性信息");
             return;
         }
-        //虽然指定了返回的数据结构，有些模型可能还是会返回无法解析的内容，所以这里需要做下容错处理，先兼容直接返回数组的情况
+        // 虽然指定了返回结构，但模型仍可能输出非标准内容，需要兼容数组形式
         List<String> facts;
         if (factResponse.trim().startsWith("[")) {
             facts = JsonUtil.toList(factResponse, String.class);
@@ -94,7 +113,7 @@ public class LongTermMemoryService {
             return;
         }
 
-        //Retrieve old memory
+        // 先检索旧记忆，便于判断新增/更新/删除
         for (String fact : facts) {
             if (StringUtils.isBlank(fact)) {
                 continue;
@@ -110,7 +129,7 @@ public class LongTermMemoryService {
             EmbeddingSearchResult<TextSegment> searchResult = convMemoryEmbeddingStore.search(searchRequest);
             searchResult.matches().forEach(item -> oldMemoryEmbeddingToContent.put(item.embeddingId(), item));
 
-            // mapping UUIDs with integers for handling UUID hallucinations
+            // 将 UUID 映射为整数，降低模型对 UUID 幻觉导致的解析失败
             Map<Integer, String> tmpIdToEmbeddingId = new HashMap<>();
             List<Map<String, String>> retrievedOldMemory = new ArrayList<>();
             int i = 0;
@@ -120,7 +139,7 @@ public class LongTermMemoryService {
                 i++;
             }
 
-            // Analyze there is any update/delete/add events required in the memory
+            // 交给模型判断是否需要新增/更新/删除，避免规则硬编码
             String analyzePrompt = getUpdateMemoryMessages(retrievedOldMemory, facts);
             String resp = llmService.chat(SseAskParams.builder()
                     .uuid(UuidUtil.createShort())
@@ -138,26 +157,30 @@ public class LongTermMemoryService {
             String analyzedMsg = AdiStringUtil.removeCodeBlock(resp);
             ActionMemories actionMemories = JsonUtil.fromJson(analyzedMsg, ActionMemories.class);
             if (null == actionMemories || null == actionMemories.getMemory() || actionMemories.getMemory().isEmpty()) {
+                // 无可执行动作时直接退出，避免误写入
                 return;
             }
             for (ActionMemories.ActionMemory actionMemory : actionMemories.getMemory()) {
                 if ("NONE".equalsIgnoreCase(actionMemory.getEvent())) {
                     log.info(" No changes required for memory id: {}", actionMemory.getId());
                 } else if (AdiConstant.MemoryEvent.DELETE.equalsIgnoreCase(actionMemory.getEvent())) {
+                    // 删除旧记忆，确保过期事实不再被召回
                     String embeddingId = tmpIdToEmbeddingId.get(Integer.parseInt(actionMemory.getId()));
                     convMemoryEmbeddingStore.remove(embeddingId);
                 } else if (AdiConstant.MemoryEvent.UPDATE.equalsIgnoreCase(actionMemory.getEvent())) {
 
-                    // Remove by embedding id and re-add with new content
+                    // 先删除再重建，避免重复向量导致召回噪声
                     String oldEmbeddingId = tmpIdToEmbeddingId.get(Integer.parseInt(actionMemory.getId()));
                     convMemoryEmbeddingStore.remove(oldEmbeddingId);
 
                     EmbeddingMatch<TextSegment> match = oldMemoryEmbeddingToContent.get(oldEmbeddingId);
                     Metadata metadata = new Metadata(Map.of(CONVERSATION_ID, convId));
                     TextSegment newSegment = TextSegment.from(actionMemory.getText(), metadata);
+                    // 复用旧向量 ID 写入新文本，保证引用关系稳定
                     convMemoryEmbeddingStore.addAll(List.of(oldEmbeddingId), List.of(match.embedding()), List.of(newSegment));
 
                 } else if (AdiConstant.MemoryEvent.ADD.equalsIgnoreCase(actionMemory.getEvent())) {
+                    // 走统一 ingest 流程，复用分段与索引策略
                     Metadata metadata = new Metadata(Map.of(CONVERSATION_ID, convId));
                     Document document = new DefaultDocument(actionMemory.getText(), metadata);
                     EmbeddingRagContext.get(AdiConstant.RetrieveContentFrom.CONV_MEMORY).ingest(document, 20, null, null);
@@ -166,10 +189,23 @@ public class LongTermMemoryService {
         }
     }
 
+    /**
+     * 长期记忆检索入口（预留）。
+     *
+     * @param text 查询文本
+     * @return 无
+     */
     public void search(String text) {
 
     }
 
+    /**
+     * 将对话拼装为统一输入格式。
+     *
+     * @param userMessage      用户消息
+     * @param assistantMessage 助手消息
+     * @return 拼装后的输入文本
+     */
     private String toInputMessage(String userMessage, String assistantMessage) {
         return """
                 Input:
@@ -178,6 +214,13 @@ public class LongTermMemoryService {
                 """.formatted(userMessage, assistantMessage);
     }
 
+    /**
+     * 构造用于更新记忆的提示词。
+     *
+     * @param retrievedOldMemory 已检索到的旧记忆
+     * @param newFacts           新抽取的事实
+     * @return 更新记忆的提示词
+     */
     private String getUpdateMemoryMessages(List<Map<String, String>> retrievedOldMemory, List<String> newFacts) {
         String currentMemoryPart;
         if (retrievedOldMemory.isEmpty()) {

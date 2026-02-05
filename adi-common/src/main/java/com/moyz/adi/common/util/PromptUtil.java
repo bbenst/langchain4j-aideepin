@@ -32,6 +32,7 @@ public class PromptUtil {
      * @param information 检索信息
      * @param extraInfo  额外信息
      * @return 拼装后的提示词
+     * @throws BaseException 用户问题为空时抛出异常
      */
     public static String createPrompt(String question, String memory, String information, String extraInfo) {
         if (StringUtils.isBlank(question)) {
@@ -40,6 +41,7 @@ public class PromptUtil {
         if (StringUtils.isAllBlank(memory, information, extraInfo)) {
             return question;
         }
+        // 仅在存在补充信息时拼接模板，避免无意义的提示词膨胀
         return PROMPT_INFO_EXTRA_TEMPLATE.apply(Map.of("question", question, "memory", memory, "information", Matcher.quoteReplacement(information), "extraInfo", extraInfo)).text();
     }
     /**
@@ -54,6 +56,7 @@ public class PromptUtil {
                 .filter(PromptUtil::isImageParameter)
                 .flatMap(parameter -> {
                     List<ImageContent> imageContents = new ArrayList<>();
+                    // 通过参数位置映射到实际入参，保证反射与实参一一对应
                     Object arg = args[Arrays.asList(method.getParameters()).indexOf(parameter)];
                     if (arg instanceof List imageList) {
                         for (Object ic : imageList) {
@@ -71,6 +74,7 @@ public class PromptUtil {
      * @return 是否为图片参数
      */
     public static boolean isImageParameter(Parameter parameter) {
+        // 仅识别标记为用户消息的图片参数，避免误判业务参数
         return parameter.isAnnotationPresent(dev.langchain4j.service.UserMessage.class) &&
                (
                        parameter.getType().equals(Image.class)

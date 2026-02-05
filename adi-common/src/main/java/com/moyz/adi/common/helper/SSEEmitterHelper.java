@@ -61,6 +61,7 @@ public class SSEEmitterHelper {
         }
 
         // 如果当前仍在回答中，直接拒绝新的流式请求。
+        // 先限流再检查占用，避免并发刷请求导致占用标记被恶意延长
         String askingKey = MessageFormat.format(RedisKeyConstant.USER_ASKING, user.getId());
         String askingVal = stringRedisTemplate.opsForValue().get(askingKey);
         if (StringUtils.isNotBlank(askingVal)) {
@@ -74,6 +75,7 @@ public class SSEEmitterHelper {
      *
      * @param user       用户信息
      * @param sseEmitter SSE 连接
+     * @return 无
      */
     public void startSse(User user, SseEmitter sseEmitter) {
         this.startSse(user, sseEmitter, null);
@@ -84,10 +86,12 @@ public class SSEEmitterHelper {
      * @param user       用户信息
      * @param sseEmitter SSE 连接
      * @param data       可选数据
+     * @return 无
      */
     public void startSse(User user, SseEmitter sseEmitter, String data) {
 
         String askingKey = MessageFormat.format(RedisKeyConstant.USER_ASKING, user.getId());
+        // 用短 TTL 标记“正在回复”，避免异常时长期占用
         stringRedisTemplate.opsForValue().set(askingKey, "1", 15, TimeUnit.SECONDS);
 
         String requestTimesKey = MessageFormat.format(RedisKeyConstant.USER_REQUEST_TEXT_TIMES, user.getId());
@@ -111,6 +115,7 @@ public class SSEEmitterHelper {
      *
      * @param sseAskParams     请求参数
      * @param completeCallback 请求结束后的回调
+     * @return 无
      */
     public void call(SseAskParams sseAskParams, TriConsumer<LLMResponseContent, PromptMeta, AnswerMeta> completeCallback) {
         String askingKey = registerEventStreamListener(sseAskParams);
@@ -121,6 +126,7 @@ public class SSEEmitterHelper {
                 log.error("commonProcess error", e);
                 errorAndShutdown(e, sseAskParams.getSseEmitter());
             } finally {
+                // 无论成功或失败都清理占用标记，避免用户被长期锁定
                 COMPLETED_SSE.put(sseAskParams.getSseEmitter(), Boolean.TRUE);
                 stringRedisTemplate.delete(askingKey);
             }
@@ -160,6 +166,8 @@ public class SSEEmitterHelper {
      * @param userId     用户 ID
      * @param sseEmitter SSE 连接
      * @param msg        返回消息
+     * @return 无
+     * @throws RuntimeException 发送失败时抛出异常
      */
     public void sendComplete(long userId, SseEmitter sseEmitter, String msg) {
         if (Boolean.TRUE.equals(COMPLETED_SSE.getIfPresent(sseEmitter))) {
@@ -185,6 +193,7 @@ public class SSEEmitterHelper {
      * @param questionMeta 问题元数据
      * @param answerMeta   答案元数据
      * @param audioInfo    音频信息
+     * @return 无
      */
     public void sendComplete(long userId, SseEmitter sseEmitter, PromptMeta questionMeta, AnswerMeta answerMeta, AudioInfo audioInfo) {
         ChatMeta chatMeta = new ChatMeta(questionMeta, answerMeta, audioInfo);
@@ -197,6 +206,7 @@ public class SSEEmitterHelper {
      *
      * @param userId     用户id
      * @param sseEmitter sse
+     * @return 无
      */
     public void sendComplete(long userId, SseEmitter sseEmitter) {
         if (Boolean.TRUE.equals(COMPLETED_SSE.getIfPresent(sseEmitter))) {
@@ -220,6 +230,8 @@ public class SSEEmitterHelper {
      * @param userId     用户 ID
      * @param sseEmitter SSE 连接
      * @param msg        返回消息
+     * @return 无
+     * @throws RuntimeException 发送失败时抛出异常
      */
     public void sendStartAndComplete(long userId, SseEmitter sseEmitter, String msg) {
         try {
@@ -239,6 +251,8 @@ public class SSEEmitterHelper {
      * @param userId     用户 ID
      * @param sseEmitter SSE 连接
      * @param errorMsg   错误信息
+     * @return 无
+     * @throws RuntimeException 发送失败时抛出异常
      */
     public void sendErrorAndComplete(long userId, SseEmitter sseEmitter, String errorMsg) {
         if (Boolean.TRUE.equals(COMPLETED_SSE.getIfPresent(sseEmitter))) {
@@ -261,6 +275,7 @@ public class SSEEmitterHelper {
      * 清除用户的请求占用标记。
      *
      * @param userId 用户 ID
+     * @return 无
      */
     private void delSseRequesting(long userId) {
         String askingKey = MessageFormat.format(RedisKeyConstant.USER_ASKING, userId);
@@ -271,6 +286,7 @@ public class SSEEmitterHelper {
      *
      * @param sseEmitter SSE 连接
      * @param content    内容
+     * @return 无
      */
     public static void parseAndSendPartialMsg(SseEmitter sseEmitter, String content) {
         parseAndSendPartialMsg(sseEmitter, "", content);
@@ -280,6 +296,8 @@ public class SSEEmitterHelper {
      *
      * @param sseEmitter SSE 连接
      * @param content    音频内容
+     * @return 无
+     * @throws RuntimeException 发送失败时抛出异常
      */
     public static void sendAudio(SseEmitter sseEmitter, Object content) {
         try {
@@ -294,6 +312,8 @@ public class SSEEmitterHelper {
      *
      * @param sseEmitter SSE 连接
      * @param content    内容
+     * @return 无
+     * @throws RuntimeException 发送失败时抛出异常
      */
     public static void sendThinking(SseEmitter sseEmitter, String content) {
         try {
@@ -309,12 +329,14 @@ public class SSEEmitterHelper {
      * @param sseEmitter SSE 连接
      * @param name       事件名
      * @param content    内容
+     * @return 无
      */
     public static void parseAndSendPartialMsg(SseEmitter sseEmitter, String name, String content) {
         if (Boolean.TRUE.equals(COMPLETED_SSE.getIfPresent(sseEmitter))) {
             log.warn("sseEmitter already completed,name:{}", name);
             return;
         }
+        // 按行拆分并插入换行占位符，保持前端渲染协议一致
         String[] lines = content.split("[\\r\\n]", -1);
         if (lines.length > 1) {
             sendPartial(sseEmitter, name, " " + lines[0]);
@@ -334,6 +356,7 @@ public class SSEEmitterHelper {
      * @param sseEmitter SSE 连接
      * @param name       事件名
      * @param msg        消息内容
+     * @return 无
      */
     public static void sendPartial(SseEmitter sseEmitter, String name, String msg) {
         if (Boolean.TRUE.equals(COMPLETED_SSE.getIfPresent(sseEmitter))) {
@@ -360,7 +383,7 @@ public class SSEEmitterHelper {
      */
     public static Pair<PromptMeta, AnswerMeta> calculateToken(ChatResponse response, String uuid) {
         log.info("返回数据结束了:{}", response);
-        //缓存以便后续统计此次提问的消耗总token
+        // 使用 totalTokenCount 作为输入口径，保证与计费统计一致
         int inputTokenCount = response.metadata().tokenUsage().totalTokenCount();
         int outputTokenCount = response.metadata().tokenUsage().outputTokenCount();
         log.info("StreamingChatModel token cost,uuid:{},inputTokenCount:{},outputTokenCount:{}", uuid, inputTokenCount, outputTokenCount);
@@ -375,6 +398,7 @@ public class SSEEmitterHelper {
      *
      * @param error      错误信息
      * @param sseEmitter SSE 连接
+     * @return 无
      */
     public static void errorAndShutdown(Throwable error, SseEmitter sseEmitter) {
         if (Boolean.TRUE.equals(COMPLETED_SSE.getIfPresent(sseEmitter))) {
@@ -385,6 +409,7 @@ public class SSEEmitterHelper {
         try {
             String errorMsg = error.getMessage();
             if (error instanceof OpenAiHttpException openAiHttpException) {
+                // 尝试解析 OpenAI 错误体，优先返回更可读的业务错误信息
                 OpenAiError openAiError = JsonUtil.fromJson(openAiHttpException.getMessage(), OpenAiError.class);
                 if (null != openAiError) {
                     errorMsg = openAiError.getError().getMessage();
@@ -403,6 +428,7 @@ public class SSEEmitterHelper {
      * 删除指定缓存键。
      *
      * @param cache 缓存键
+     * @return 无
      */
     public void deleteCache(String cache) {
         stringRedisTemplate.delete(cache);

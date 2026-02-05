@@ -9,10 +9,20 @@ import java.io.Serializable;
  */
 @Data
 public class UserStatistic implements Serializable {
-
+    /**
+     * 序列化版本号
+     */
     private static final long serialVersionUID = 1L;
-
+    /**
+     * todayCreated
+     */
     private Integer todayCreated;
+    /**
+     * todayActivated
+     */
     private Integer todayActivated;
+    /**
+     * totalNormal
+     */
     private Integer totalNormal;
 }

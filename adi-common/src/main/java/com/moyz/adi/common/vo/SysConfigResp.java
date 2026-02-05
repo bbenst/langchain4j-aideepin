@@ -5,12 +5,21 @@ import lombok.Data;
 
 import java.util.List;
 
+/**
+ * Sys配置响应
+ */
 @Data
 public class SysConfigResp {
+    /**
+     * asr配置
+     */
     private AsrSetting asrSetting;
+    /**
+     * tts配置
+     */
     private TtsSetting ttsSetting;
     /**
-     * ttsSetting中设置的 modelName 对应的可用语音列表
+     * availableVoices
      */
     private List<ModelVoice> availableVoices;
 }

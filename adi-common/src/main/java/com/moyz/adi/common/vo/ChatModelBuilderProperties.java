@@ -9,13 +9,16 @@ import lombok.NoArgsConstructor;
 
 import java.util.Objects;
 
+/**
+ * 聊天模型BuilderProperties对象
+ */
 @Data
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
 public class ChatModelBuilderProperties {
     /**
-     *
+     * temperature
      */
     private Double temperature;
 

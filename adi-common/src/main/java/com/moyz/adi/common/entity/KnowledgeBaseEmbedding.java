@@ -8,19 +8,28 @@ import com.pgvector.PGvector;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+/**
+ * 知识库-嵌入实体
+ */
 @Data
 @TableName("adi_knowledge_base_embedding")
 @Schema(title = "知识库-嵌入实体", description = "知识库嵌入表")
 public class KnowledgeBaseEmbedding{
-
+    /**
+     * 向量ID
+     */
     @Schema(title = "embedding_id")
     @TableId(value = "embedding_id", type = IdType.AUTO)
     private String embeddingId;
-
+    /**
+     * 向量
+     */
     @Schema(title = "embedding")
     @TableField("embedding")
     private PGvector embedding;
-
+    /**
+     * 对应的文档
+     */
     @Schema(title = "对应的文档")
     @TableField("text")
     private String text;

@@ -87,11 +87,13 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
                 .last("limit 1")
                 .oneOpt();
         if (existFile.isPresent()) {
+            // 按内容哈希去重，减少重复存储与带宽消耗
             AdiFile adiFile = existFile.get();
             boolean exist = FileOperatorContext.checkIfExist(adiFile);
             if (exist) {
                 return adiFile;
             } else {
+                // 记录存在但文件缺失时软删，保持数据一致性
                 log.warn("文件不存在,删除记录以便后续重新生成,fileId:{},uuid:{},sha256:{}", adiFile.getId(), adiFile.getUuid(), adiFile.getSha256());
                 this.lambdaUpdate().eq(AdiFile::getId, adiFile.getId()).set(AdiFile::getIsDeleted, true).update();
             }
@@ -208,11 +210,13 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
      * @param uuid      图片 UUID
      * @param thumbnail 是否读取缩略图
      * @return 图片内容
+     * @throws BaseException 未授权或文件不存在时抛出异常
      */
     public BufferedImage readMyImage(String uuid, boolean thumbnail) {
         if (StringUtils.isBlank(ThreadContext.getToken())) {
             throw new BaseException(A_AI_IMAGE_NO_AUTH);
         }
+        // 先校验权限再读文件，避免未授权访问本地资源
         AdiFile adiFile = this.lambdaQuery()
                 .eq(!ThreadContext.getCurrentUser().getIsAdmin(), AdiFile::getUserId, ThreadContext.getCurrentUserId())
                 .eq(AdiFile::getUuid, uuid)
@@ -229,6 +233,7 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
      * @param uuid      图片 UUID
      * @param thumbnail 是否读取缩略图
      * @return 图片内容
+     * @throws BaseException 文件不存在时抛出异常
      */
     public BufferedImage readImage(String uuid, boolean thumbnail) {
         AdiFile adiFile = this.lambdaQuery()
@@ -245,6 +250,7 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
      *
      * @param uuid 图片 UUID
      * @return 图片路径
+     * @throws BaseException 图片不存在时抛出异常
      */
     public String getImagePath(String uuid) {
         AdiFile adiFile = this.lambdaQuery()
@@ -343,6 +349,7 @@ public class FileService extends ServiceImpl<FileMapper, AdiFile> {
             return Collections.emptyList();
         }
         List<String> result = new ArrayList<>();
+        // 查询可用文件并统一转为 URL，避免前端处理存储细节
         this.lambdaQuery()
                 .in(AdiFile::getUuid, fileUuids)
                 .eq(AdiFile::getIsDeleted, false)

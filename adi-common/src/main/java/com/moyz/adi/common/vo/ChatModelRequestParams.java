@@ -16,13 +16,37 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ChatModelRequestParams {
+    /**
+     * memoryID
+     */
     private String memoryId;
+    /**
+     * 系统消息
+     */
     private String systemMessage;
+    /**
+     * 用户消息
+     */
     private String userMessage;
     //图片地址，多模态LLM才生效
+    /**
+     * 图片Urls
+     */
     private List<String> imageUrls;
+    /**
+     * MCPClients
+     */
     private List<McpClient> mcpClients;
+    /**
+     * 响应格式
+     */
     private String responseFormat;
+    /**
+     * return思考
+     */
     private Boolean returnThinking;
+    /**
+     * 启用网页搜索
+     */
     private Boolean enableWebSearch;
 }

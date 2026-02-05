@@ -20,6 +20,7 @@ public class TtsUtil {
      * @param ttsSetting        tts设置
      * @param answerContentType 内容类型
      * @return 是否要进行文本转语音
+     * @throws NullPointerException ttsSetting 为空时抛出异常
      */
     public static boolean needTts(TtsSetting ttsSetting, int answerContentType) {
         return AdiConstant.TtsConstant.SYNTHESIZER_SERVER.equals(ttsSetting.getSynthesizerSide()) && answerContentType == AdiConstant.ConversationConstant.ANSWER_CONTENT_TYPE_AUDIO;

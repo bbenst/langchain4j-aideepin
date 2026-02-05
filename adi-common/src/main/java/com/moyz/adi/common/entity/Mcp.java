@@ -13,60 +13,89 @@ import org.apache.ibatis.type.JdbcType;
 
 import java.util.List;
 
+/**
+ * mcp服务实体
+ */
 @EqualsAndHashCode(callSuper = true)
 @Data
 @TableName(value = "adi_mcp", autoResultMap = true)
 @Schema(title = "mcp服务实体")
 public class Mcp extends BaseEntity {
-
+    /**
+     * UUID
+     */
     @Schema(title = "uuid")
     @TableField(value = "uuid")
     private String uuid;
-
+    /**
+     * 标题
+     */
     @Schema(title = "标题")
     @TableField(value = "title")
     private String title;
-
+    /**
+     * 传输类型(1:sse,2:stdio)
+     */
     @Schema(title = "传输类型(1:sse,2:stdio)")
     @TableField(value = "transport_type")
     private String transportType;
-
+    /**
+     * SSE地址
+     */
     @Schema(title = "sse url")
     @TableField(value = "sse_url")
     private String sseUrl;
-
+    /**
+     * sse超时时间
+     */
     @Schema(title = "sse超时时间")
     @TableField(value = "sse_timeout")
     private Integer sseTimeout;
-
+    /**
+     * stdio命令
+     */
     @Schema(title = "stdio命令")
     @TableField(value = "stdio_command")
     private String stdioCommand;
-
+    /**
+     * stdio参数
+     */
     @Schema(title = "stdio参数")
     @TableField(value = "stdio_arg")
     private String stdioArg;
-
+    /**
+     * 由系统管理员预设的参数
+     */
     @Schema(title = "由系统管理员预设的参数")
     @TableField(value = "preset_params", jdbcType = JdbcType.ARRAY, typeHandler = McpPresetParamTypeHandler.class)
     private List<McpCommonParam> presetParams;
-
+    /**
+     * 待用户设置的参数定义,用户设置后与common_params合并做为mcp的启动参数
+     */
     @Schema(title = "待用户设置的参数定义,用户设置后与common_params合并做为mcp的启动参数")
     @TableField(value = "customized_param_definitions", jdbcType = JdbcType.ARRAY, typeHandler = McpCustomizedParamDefinitionTypeHandler.class)
     private List<McpCustomizedParamDefinition> customizedParamDefinitions;
-
+    /**
+     * 安装类型(1:docker、2:local、3:remote、4:wasm)
+     */
     @Schema(title = "安装类型(1:docker、2:local、3:remote、4:wasm)")
     @TableField(value = "install_type")
     private String installType;
-
+    /**
+     * 网址
+     */
     @Schema(title = "网址")
     @TableField(value = "website")
     private String website;
-
+    /**
+     * 描述
+     */
     @Schema(title = "描述")
     @TableField(value = "remark")
     private String remark;
-
+    /**
+     * 是否启用
+     */
     @Schema(title = "是否启用")
     @TableField(value = "is_enable")
     private Boolean isEnable;

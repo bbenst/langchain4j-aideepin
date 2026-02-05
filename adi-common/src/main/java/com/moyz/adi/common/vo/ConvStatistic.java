@@ -15,9 +15,16 @@ import java.io.Serializable;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ConvStatistic implements Serializable {
-
+    /**
+     * 序列化版本号
+     */
     private static final long serialVersionUID = 1L;
-
+    /**
+     * todayCreated
+     */
     private Integer todayCreated;
+    /**
+     * total
+     */
     private Integer total;
 }

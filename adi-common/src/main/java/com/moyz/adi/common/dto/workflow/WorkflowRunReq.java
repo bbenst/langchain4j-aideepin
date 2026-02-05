@@ -6,7 +6,13 @@ import lombok.Data;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * WorkflowRun请求
+ */
 @Data
 public class WorkflowRunReq {
+    /**
+     * inputs
+     */
     private List<ObjectNode> inputs;
 }

@@ -8,7 +8,16 @@ import lombok.Data;
  */
 @Data
 public class TtsJobInfo {
+    /**
+     * jobID
+     */
     private String jobId;
+    /**
+     * tts模型上下文
+     */
     private TtsModelContext ttsModelContext;
+    /**
+     * 文件路径
+     */
     private String filePath;
 }

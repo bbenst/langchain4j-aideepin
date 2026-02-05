@@ -9,11 +9,24 @@ import java.io.Serializable;
  */
 @Data
 public class KbStatistic implements Serializable {
-
+    /**
+     * 序列化版本号
+     */
     private static final long serialVersionUID = 1L;
-
+    /**
+     * kbTodayCreated
+     */
     private Integer kbTodayCreated;
+    /**
+     * itemTodayCreated
+     */
     private Integer itemTodayCreated;
+    /**
+     * kbTotal
+     */
     private Integer kbTotal;
+    /**
+     * itemTotal
+     */
     private Integer itemTotal;
 }

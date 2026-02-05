@@ -30,6 +30,8 @@ public class AsrModelContext {
 
     /**
      * 直接由系统设置来决定使用哪个ASR模型，不需要让用户选择。
+     *
+     * @throws BaseException ASR 配置缺失或模型不可用时抛出异常
      */
     public AsrModelContext() {
         String asrSetting = SysConfigService.getByKey(AdiConstant.SysConfigKey.ASR_SETTING);
@@ -51,6 +53,7 @@ public class AsrModelContext {
      *
      * @param urlOrUuid 音频地址或 UUID
      * @return 识别文本
+     * @throws BaseException ASR 服务不可用或识别失败时抛出异常
      */
     public String audioToText(String urlOrUuid) {
         return this.current.audioToText(urlOrUuid);
@@ -59,6 +62,7 @@ public class AsrModelContext {
      * 注册 ASR 服务。
      *
      * @param modelService ASR 服务
+     * @return 无
      */
     public static void addService(AbstractAsrModelService modelService) {
         NAME_TO_SERVICE.put(modelService.getAiModel().getName(), modelService);
@@ -67,6 +71,7 @@ public class AsrModelContext {
      * 清理指定平台下的 ASR 服务。
      *
      * @param platform 平台名称
+     * @return 无
      */
     public static void clearByPlatform(String platform) {
         List<String> needDeleted = NAME_TO_SERVICE.values()

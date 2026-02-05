@@ -30,6 +30,7 @@ public class LLMContext {
      * 注册大模型服务。
      *
      * @param llmService 大模型服务
+     * @return 无
      */
     public static void addLLMService(AbstractLLMService llmService) {
         LLM_SERVICES.add(llmService);
@@ -40,6 +41,7 @@ public class LLMContext {
      *
      * @param modelPlatform 模型所属的平台
      * @param modelType 模型类型
+     * @return 无
      */
     public static void clearByPlatform(String modelPlatform, String modelType) {
         List<AbstractLLMService> readyToDelete = LLM_SERVICES.stream()
@@ -55,6 +57,7 @@ public class LLMContext {
      *
      * @param platform 平台名称
      * @param modelName 模型名称
+     * @return 无
      */
     public static void remove(String platform, String modelName) {
         List<AbstractLLMService> readyToDelete = LLM_SERVICES.stream()
@@ -96,6 +99,7 @@ public class LLMContext {
      * @param platform 平台名称
      * @param modelName 模型名称
      * @return 大模型服务
+     * @throws BaseException 当无法找到可用模型时抛出异常
      */
     public static AbstractLLMService getServiceOrDefault(String platform, String modelName) {
         return getServiceByPlatformAndModel(platform, modelName, true);
@@ -106,6 +110,7 @@ public class LLMContext {
      * @param modelId 模型 ID
      * @param useDefault 是否使用默认模型
      * @return 大模型服务
+     * @throws BaseException 当无法找到可用模型时抛出异常
      */
     public static AbstractLLMService getServiceById(Long modelId, boolean useDefault) {
         AbstractLLMService service = LLM_SERVICES.stream()
@@ -132,6 +137,7 @@ public class LLMContext {
      * @param modelName  模型名称
      * @param useDefault 如果找不到，是否使用第1个可用的免费模型
      * @return AbstractLLMService
+     * @throws BaseException 当无法找到可用模型时抛出异常
      */
     public static AbstractLLMService getServiceByPlatformAndModel(String platform, String modelName, boolean useDefault) {
         AbstractLLMService service = LLM_SERVICES.stream()

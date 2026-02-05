@@ -137,6 +137,7 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
      * @param maxMsgUuid 最大uuid（转换成id进行判断）
      * @param pageSize   每页数量
      * @return 列表
+     * @throws BaseException 对话不存在或分页游标无效时抛出异常
      */
     public ConvMsgListResp detail(String uuid, String maxMsgUuid, int pageSize) {
         Conversation conversation = this.lambdaQuery().eq(Conversation::getUuid, uuid).one();
@@ -155,6 +156,7 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
             if (null == maxMsg) {
                 throw new BaseException(A_DATA_NOT_FOUND);
             }
+            // 用 id 作为分页边界，避免 UUID 无序导致分页错乱
             maxId = maxMsg.getId();
         }
 
@@ -162,6 +164,7 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
         if (questions.isEmpty()) {
             return new ConvMsgListResp(StringUtils.EMPTY, Collections.emptyList());
         }
+        // 取最小 id 的消息作为下一页游标，保证分页稳定
         String minUuid = questions.stream().reduce(questions.get(0), (a, b) -> {
             if (a.getId() < b.getId()) {
                 return a;
@@ -171,12 +174,14 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
         // 组装问题消息内容
         List<ConvMsgDto> userMessages = MPPageUtil.convertToList(questions, ConvMsgDto.class, (source, target) -> {
             if (StringUtils.isNotBlank(source.getAttachments())) {
+                // 统一转换为可访问 URL，避免前端拼路径
                 List<String> urls = fileService.getUrls(Arrays.stream(source.getAttachments().split(",")).toList());
                 target.setAttachmentUrls(urls);
             } else {
                 target.setAttachmentUrls(Collections.emptyList());
             }
             if (StringUtils.isNotBlank(source.getAudioUuid())) {
+                // 统一转换为可访问 URL，便于前端直接播放
                 target.setAudioUrl(fileService.getUrl(source.getAudioUuid()));
             } else {
                 target.setAudioUrl("");
@@ -187,6 +192,7 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
 
         // 组装回答消息内容
         List<Long> parentIds = questions.stream().map(ConversationMessage::getId).toList();
+        // 批量查询子消息并分组，减少多次查询开销
         List<ConversationMessage> childMessages = conversationMessageService
                 .lambdaQuery()
                 .in(ConversationMessage::getParentMessageId, parentIds)
@@ -198,13 +204,16 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
         result.getMsgList().forEach(item -> {
             List<ConvMsgDto> children = MPPageUtil.convertToList(idToMessages.get(item.getId()), ConvMsgDto.class);
             if (children.size() > 1) {
+                // 重新生成场景下按时间倒序，优先展示最新回答
                 children = children.stream().sorted(Comparator.comparing(ConvMsgDto::getCreateTime).reversed()).toList();
             }
 
             for (ConvMsgDto convMsgDto : children) {
                 AiModel aiModel = MODEL_ID_TO_OBJ.get(convMsgDto.getAiModelId());
+                // 前置填充模型平台，减少前端二次查询
                 convMsgDto.setAiModelPlatform(null == aiModel ? "" : aiModel.getPlatform());
                 if (StringUtils.isNotBlank(convMsgDto.getAudioUuid())) {
+                    // 填充音频访问 URL，方便前端直接使用
                     convMsgDto.setAudioUrl(fileService.getUrl(convMsgDto.getAudioUuid()));
                 } else {
                     convMsgDto.setAudioUrl("");
@@ -241,6 +250,7 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
         Conversation conversation = new Conversation();
         conversation.setUuid(uuid);
         conversation.setUserId(userId);
+        // 标题过长会影响列表展示与检索性能，因此在写入前做截断
         conversation.setTitle(StringUtils.substring(title, 0, 45));
         baseMapper.insert(conversation);
 
@@ -386,6 +396,7 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
         if (null != convEditReq.getMcpIds()) {
             List<Long> filteredMcpIds = filterEnableMcpIds(convEditReq.getMcpIds());
             if (filteredMcpIds.isEmpty()) {
+                // 过滤后为空时显式清空，避免保留无效配置
                 one.setMcpIds(StringUtils.join(filteredMcpIds, ","));
             }
         }
@@ -477,6 +488,7 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
             if (userMcpList.stream().anyMatch(item -> item.getMcpId().equals(mcpIdInReq))) {
                 result.add(mcpIdInReq);
             } else {
+                // 无权限或已禁用时仅记录日志，避免阻断整体创建流程
                 log.warn("User mcp id {} not found or disabled in user mcp list, userId: {}, mcpId:{}", mcpIdInReq, ThreadContext.getCurrentUserId(), mcpIdInReq);
             }
         }
@@ -510,6 +522,7 @@ public class ConversationService extends ServiceImpl<ConversationMapper, Convers
         if (CollectionUtils.isEmpty(ids)) {
             return Collections.emptyList();
         }
+        // 仅保留公开或当前用户拥有的知识库，避免越权关联
         return knowledgeBaseService.listByIds(ids).stream()
                 .filter(item -> item.getIsPublic() || user.getUuid().equals(item.getOwnerUuid()))
                 .toList();

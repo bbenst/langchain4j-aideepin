@@ -110,9 +110,11 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
      *
      * @param editReq 更新请求
      * @return 配置 DTO
+     * @throws BaseException MCP 配置不存在时抛出异常
      */
     public UserMcpDto saveOrUpdate(UserMcpUpdateReq editReq) {
         if (null == editReq.getMcpCustomizedParams() && null == editReq.getIsEnable()) {
+            // 空更新请求直接返回，避免无意义写库
             log.warn("UserMcp edit request is empty, editReq: {}", editReq);
             return null;
         }
@@ -129,6 +131,7 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
             userMcp.setMcpId(editReq.getMcpId());
             userMcp.setUserId(ThreadContext.getCurrentUserId());
             if (null != paramSettings) {
+                // 仅在入库前加密敏感字段，确保落库安全
                 encryptParams(paramSettings, mcp);
                 userMcp.setMcpCustomizedParams(paramSettings);
             }
@@ -140,12 +143,14 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
             UserMcp updateObj = new UserMcp();
             updateObj.setId(userMcp.getId());
             if (null != paramSettings) {
+                // 更新时同样对敏感字段加密，保持存储一致性
                 encryptParams(paramSettings, mcp);
                 updateObj.setMcpCustomizedParams(paramSettings);
             }
             if (null != editReq.getIsEnable()) {
                 updateObj.setIsEnable(editReq.getIsEnable());
             }
+            // 复用原对象更新，避免覆盖未变更字段
             baseMapper.updateById(userMcp);
         }
         UserMcpDto dto = new UserMcpDto();
@@ -183,6 +188,7 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
         for (Mcp mcp : mcpInfos) {
             UserMcp userMcp = mcpIdToUserMcp.get(mcp.getId());
             if (userMcp == null) {
+                // 忽略无权限或已禁用的 MCP，避免影响整体请求
                 log.warn("No user MCP params found for MCP ID: {}", mcp.getId());
                 continue;
             }
@@ -192,6 +198,7 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
 
             McpTransport transport;
             if (AdiConstant.McpConstant.TRANSPORT_TYPE_SSE.equals(mcp.getTransportType())) {
+                // SSE 需要将认证参数拼接到 URL，便于服务端鉴权
                 String httpQueryString = createHttpQueryString(mcp, userMcp);
                 String url = mcp.getSseUrl();
                 if (!url.contains("?")) {
@@ -204,6 +211,7 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
                         .logResponses(true)
                         .build();
             } else {
+                // STDIO 通过环境变量传参，避免命令行明文泄露
                 Map<String, String> environment = createEnvironment(mcp, userMcp);
                 transport = new StdioMcpTransport.Builder()
                         .command(List.of(mcp.getStdioCommand(), mcp.getStdioArg()))
@@ -223,6 +231,7 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
      * 启用用户 MCP 配置。
      *
      * @param uuid 配置 UUID
+     * @return 无
      */
     public void enable(String uuid) {
         UserMcp userMcp = PrivilegeUtil.checkAndGetByUuid(uuid, this.query(), A_USER_MCP_SERVER_NOT_FOUND);
@@ -236,6 +245,7 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
      * 软删除用户 MCP 配置。
      *
      * @param uuid 配置 UUID
+     * @return 无
      */
     public void softDelete(String uuid) {
         PrivilegeUtil.checkAndDelete(uuid, this.query(), this.update(), A_USER_MCP_SERVER_NOT_FOUND);
@@ -247,9 +257,11 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
      *
      * @param setting mcp设置项
      * @param mcp     mcp对象
+     * @return 无
      */
     private void encryptParams(List<UserMcpCustomizedParam> setting, Mcp mcp) {
         for (UserMcpCustomizedParam userMcpCustomizedParam : setting) {
+            // 仅对标记需加密的字段处理，避免误加密导致不可用
             mcp.getCustomizedParamDefinitions().stream().filter(item -> item.getName().equals(userMcpCustomizedParam.getName()) && Boolean.TRUE.equals(item.getRequireEncrypt()))
                     .findFirst()
                     .ifPresent(item -> {
@@ -264,9 +276,11 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
      *
      * @param mcpParams 用户设置的已加密的mcp参数
      * @param mcp       mcp对象
+     * @return 无
      */
     private void decryptParams(List<UserMcpCustomizedParam> mcpParams, Mcp mcp) {
         for (UserMcpCustomizedParam userMcpCustomizedParam : mcpParams) {
+            // 仅解密已加密且标记需加密的字段，避免破坏普通字段
             mcp.getCustomizedParamDefinitions().stream()
                     .filter(item -> Boolean.TRUE.equals(userMcpCustomizedParam.getEncrypted()) && item.getName().equals(userMcpCustomizedParam.getName()) && Boolean.TRUE.equals(item.getRequireEncrypt()))
                     .findFirst()
@@ -282,6 +296,7 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
      *
      * @param dto DTO
      * @param mcp MCP 信息
+     * @return 无
      */
     public void setMcpInfo(UserMcpDto dto, Mcp mcp) {
         if (mcp == null) {
@@ -302,6 +317,7 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
     private String createHttpQueryString(Mcp mcp, UserMcp userMcp) {
         StringBuilder httpQueryParams = new StringBuilder();
         Map<String, String> environment = createEnvironment(mcp, userMcp);
+        // HTTP SSE 无法使用环境变量，需将参数序列化到 query 中
         for (Map.Entry<String, String> entry : environment.entrySet()) {
             String key = entry.getKey();
             String value = entry.getValue();
@@ -326,6 +342,7 @@ public class UserMcpService extends ServiceImpl<UserMcpMapper, UserMcp> {
     private Map<String, String> createEnvironment(Mcp mcp, UserMcp userMcp) {
         Map<String, String> environment = new HashMap<>();
         for (McpCommonParam initParams : mcp.getPresetParams()) {
+            // 先注入预设参数作为默认值
             environment.put(initParams.getName(), String.valueOf(initParams.getValue()));
         }
         for (McpCustomizedParamDefinition uninitParam : mcp.getCustomizedParamDefinitions()) {

@@ -8,10 +8,25 @@ import lombok.Data;
  */
 @Data
 public class McpCommonParam {
+    /**
+     * 名称
+     */
     private String name;
+    /**
+     * 标题
+     */
     private String title;
+    /**
+     * 值
+     */
     private Object value;
+    /**
+     * requireEncrypt
+     */
     @JsonProperty("require_encrypt")
     private Boolean requireEncrypt;
+    /**
+     * encrypted
+     */
     private Boolean encrypted;
 }

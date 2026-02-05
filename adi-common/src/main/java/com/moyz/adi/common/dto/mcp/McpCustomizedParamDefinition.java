@@ -4,12 +4,21 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 /**
- * 待用户设置的MCP参数定义(个性化配置),用户设置后与mcp.common_params合并做为mcp的启动参数
+ * MCP自定义参数Definition对象
  */
 @Data
 public class McpCustomizedParamDefinition {
+    /**
+     * 名称
+     */
     private String name;
+    /**
+     * 标题
+     */
     private String title;
+    /**
+     * requireEncrypt
+     */
     @JsonProperty("require_encrypt")
     private Boolean requireEncrypt;
 }

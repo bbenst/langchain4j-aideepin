@@ -16,10 +16,17 @@ import java.io.Serializable;
 @AllArgsConstructor
 @NoArgsConstructor
 public class TokenCostStatistic implements Serializable {
-
+    /**
+     * 序列化版本号
+     */
     @Serial
     private static final long serialVersionUID = 1L;
-
+    /**
+     * todayTokenCost
+     */
     private Integer todayTokenCost;
+    /**
+     * monthTokenCost
+     */
     private Integer monthTokenCost;
 }

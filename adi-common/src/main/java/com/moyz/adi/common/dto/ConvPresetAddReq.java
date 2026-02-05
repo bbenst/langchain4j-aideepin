@@ -4,14 +4,25 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import org.springframework.validation.annotation.Validated;
 
+/**
+ * Conv预设新增请求
+ */
 @Data
 @Validated
 public class ConvPresetAddReq {
-
+    /**
+     * 标题
+     */
     @NotBlank
     private String title;
+    /**
+     * 描述
+     */
     @NotBlank
     private String remark;
+    /**
+     * AI系统消息
+     */
     @NotBlank
     private String aiSystemMessage;
 }

@@ -12,11 +12,19 @@ import java.util.Set;
 import static dev.langchain4j.internal.ValidationUtils.*;
 import static java.util.Collections.unmodifiableSet;
 
+/**
+ * IsJSONIn对象
+ */
 @ToString
 @EqualsAndHashCode
 public class IsJsonIn implements Filter {
-
+    /**
+     * 键
+     */
     private final String key;
+    /**
+     * comparisonValues
+     */
     private final Collection<?> comparisonValues;
 
     public IsJsonIn(String key, Collection<?> comparisonValues) {

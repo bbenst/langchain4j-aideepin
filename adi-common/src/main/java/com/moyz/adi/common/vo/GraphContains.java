@@ -7,11 +7,19 @@ import lombok.ToString;
 
 import static dev.langchain4j.internal.ValidationUtils.ensureNotBlank;
 
+/**
+ * 图谱Contains对象
+ */
 @ToString
 @EqualsAndHashCode
 public class GraphContains implements Filter {
-
+    /**
+     * 键
+     */
     private final String key;
+    /**
+     * 值
+     */
     private final String value;
 
     public GraphContains(String key, String value) {

@@ -18,17 +18,29 @@ import static dev.langchain4j.data.message.ChatMessageSerializer.messagesToJson;
 import static org.mapdb.Serializer.STRING;
 
 /**
- * Short-Term Memory Storage based on MapDB
+ * 基于 MapDB 的短期记忆存储实现。
  */
 @Slf4j
 public class MapDBChatMemoryStore implements ChatMemoryStore {
 
+    /**
+     * 单例对象。
+     */
     public static MapDBChatMemoryStore singleton;
 
+    /**
+     * MapDB 数据库实例。
+     */
     private final DB db;
 
+    /**
+     * 内部消息存储映射（memoryId -> JSON）。
+     */
     private final Map<String, String> map;
 
+    /**
+     * 私有构造函数，禁止外部实例化。
+     */
     private MapDBChatMemoryStore() {
         String memoryDir = SpringUtil.getProperty("local.chat-memory");
         log.info("chat memory path:{}", memoryDir);
@@ -36,22 +48,35 @@ public class MapDBChatMemoryStore implements ChatMemoryStore {
         map = db.hashMap("messages", STRING, STRING).createOrOpen();
     }
 
+    /**
+     * 获取指定会话的消息列表。
+     *
+     * @param memoryId 会话标识
+     * @return 消息列表
+     */
     @Override
     public List<ChatMessage> getMessages(Object memoryId) {
         String json = map.get((String) memoryId);
         return messagesFromJson(json);
     }
 
+    /**
+     * 更新指定会话的消息列表。
+     *
+     * @param memoryId 会话标识
+     * @param messages 消息列表
+     * @return 无
+     */
     @Override
     public void updateMessages(Object memoryId, List<ChatMessage> messages) {
-        //AiMessage in first position is not allow
+        // 首条消息不能为 AiMessage，避免上下文顺序被模型误解
         if (!messages.isEmpty() && messages.get(0) instanceof AiMessage) {
             messages.remove(0);
         }
         if (messages.isEmpty()) {
             return;
         }
-        //Filter out the available messages.(UserMessage,AiMessage)
+        // 只保留可用于上下文的消息类型，避免系统消息散落引发提示词污染
         List<ChatMessage> availableMessage = new ArrayList<>();
         int index = 0;
         if (messages.get(0) instanceof SystemMessage) {
@@ -69,15 +94,27 @@ public class MapDBChatMemoryStore implements ChatMemoryStore {
         db.commit();
     }
 
+    /**
+     * 删除指定会话的消息列表。
+     *
+     * @param memoryId 会话标识
+     * @return 无
+     */
     @Override
     public void deleteMessages(Object memoryId) {
         map.remove((String) memoryId);
         db.commit();
     }
 
+    /**
+     * 获取单例实例。
+     *
+     * @return 单例对象
+     */
     public static MapDBChatMemoryStore getSingleton() {
         if (null == singleton) {
             synchronized (MapDBChatMemoryStore.class) {
+                // 双重检查锁降低同步开销，同时保证线程安全
                 if (null == singleton) {
                     singleton = new MapDBChatMemoryStore();
                 }

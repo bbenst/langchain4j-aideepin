@@ -143,10 +143,13 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
     public SseEmitter sseAsk(AskReq askReq) {
         SseEmitter sseEmitter = new SseEmitter(SSE_TIMEOUT);
         User user = ThreadContext.getCurrentUser();
+        // 先做限流与并发占用校验，避免建立无效 SSE 连接
         if (!sseEmitterHelper.checkOrComplete(user, sseEmitter)) {
             return sseEmitter;
         }
+        // 先启动 SSE，确保前端尽快进入流式响应状态
         sseEmitterHelper.startSse(user, sseEmitter);
+        // 通过代理对象触发 @Async，避免自调用导致异步失效
         self.asyncCheckAndChat(sseEmitter, user, askReq);
         return sseEmitter;
     }
@@ -168,6 +171,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
                     .eq(Conversation::getIsDeleted, true)
                     .one();
             if (null != delConv) {
+                // 对话已删除则直接终止，避免继续写入无效数据
                 sseEmitterHelper.sendErrorAndComplete(user.getId(), sseEmitter, "该对话已经删除");
                 return false;
             }
@@ -177,8 +181,10 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
                     .eq(Conversation::getUserId, user.getId())
                     .eq(Conversation::getIsDeleted, false)
                     .count();
+            // 从配置中心获取上限，避免硬编码导致策略不可调
             long convsMax = Integer.parseInt(LocalCache.CONFIGS.get(AdiConstant.SysConfigKey.CONVERSATION_MAX_NUM));
             if (convsCount >= convsMax) {
+                // 达到上限直接拒绝，避免资源被超额占用
                 sseEmitterHelper.sendErrorAndComplete(user.getId(), sseEmitter, "对话数量已经达到上限，当前对话上限为：" + convsMax);
                 return false;
             }
@@ -186,6 +192,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
             // 校验 3：当前用户配额
             AiModel aiModel = LLMContext.getAiModel(askReq.getModelPlatform(), askReq.getModelName());
             if (null != aiModel && !aiModel.getIsFree()) {
+                // 仅对非免费模型计费校验，避免免费模型被误拦截
                 ErrorEnum errorMsg = quotaHelper.checkTextQuota(user);
                 if (null != errorMsg) {
                     sseEmitterHelper.sendErrorAndComplete(user.getId(), sseEmitter, errorMsg.getInfo());
@@ -206,6 +213,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
      * @param sseEmitter SSE 连接
      * @param user       用户
      * @param askReq     提问请求
+     * @return 无
      */
     @Async
     public void asyncCheckAndChat(SseEmitter sseEmitter, User user, AskReq askReq) {
@@ -226,11 +234,12 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
 
         // 发送“问题分析中”状态给前端
         SSEEmitterHelper.sendPartial(sseEmitter, SSEEventName.STATE_CHANGED, SSEEventData.STATE_QUESTION_ANALYSING);
-        //如果是语音输入，将音频转成文本
+        // 先将语音转文本，确保检索与提示词构建基于同一输入
         if (StringUtils.isNotBlank(askReq.getAudioUuid())) {
             String path = fileService.getImagePath(askReq.getAudioUuid());
             String audioText = new AsrModelContext().audioToText(path);
             if (StringUtils.isBlank(audioText)) {
+                // 语音解析失败时终止，避免浪费模型调用
                 sseEmitterHelper.sendErrorAndComplete(user.getId(), sseEmitter, "音频解析失败，请检查音频文件是否正确");
                 return;
             }
@@ -243,6 +252,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         List<KbInfoResp> filteredKb = new ArrayList<>();
         if (StringUtils.isNotBlank(conversation.getKbIds())) {
             List<Long> kbIds = Arrays.stream(conversation.getKbIds().split(",")).map(Long::parseLong).toList();
+            // 仅保留当前用户可用的知识库，避免检索到无权限数据
             filteredKb = conversationService.filterEnableKb(user, kbIds);
 
             // 发送“知识库检索中”状态给前端
@@ -257,9 +267,11 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         Pair<String, String> memoryAndKnowledge = buildMemoryAndKnowledge(retrieverWrappers);
         String processedPrompt = PromptUtil.createPrompt(askReq.getPrompt(), memoryAndKnowledge.getLeft(), memoryAndKnowledge.getRight(), answerToAudio ? PROMPT_EXTRA_AUDIO : "");
         if (!Objects.equals(askReq.getPrompt(), processedPrompt)) {
+            // 仅在确有变化时记录增强后的提示词，避免冗余存储
             askReq.setProcessedPrompt(processedPrompt);
         }
 
+        // 重新生成场景复用原问题 UUID，保证问答关联一致
         String questionUuid = StringUtils.isNotBlank(askReq.getRegenerateQuestionUuid()) ? askReq.getRegenerateQuestionUuid() : UuidUtil.createShort();
         SseAskParams sseAskParams = new SseAskParams();
         sseAskParams.setUser(user);
@@ -269,10 +281,11 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         sseAskParams.setRegenerateQuestionUuid(askReq.getRegenerateQuestionUuid());
         sseAskParams.setAnswerContentType(answerContentType);
         if (null != conversation.getAudioConfig() && null != conversation.getAudioConfig().getVoice()) {
-            //如果对话配置了语音，则使用对话的语音配置
+            // 优先使用对话级语音配置，保证会话语音一致性
             sseAskParams.setVoice(conversation.getAudioConfig().getVoice().getParamName());
         }
 
+        // 统一构建模型请求参数，保证上下文与插件配置一致
         ChatModelRequestParams chatRequestParams = buildChatRequestParams(conversation, askReq);
         sseAskParams.setHttpRequestParams(chatRequestParams);
 
@@ -292,7 +305,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
                     audioInfo.setDuration((int) multimediaInfo.getDuration() / 1000);
                 }
                 audioInfo.setPath(response.getAudioPath());
-                // 存储到数据库并返回真实的 URL
+                // 持久化音频并返回可访问 URL，避免前端直接暴露本地路径
                 AdiFile adiFile = fileService.saveFromPath(user, response.getAudioPath());
                 audioInfo.setUuid(adiFile.getUuid());
                 audioInfo.setUrl(FileOperatorContext.getFileUrl(adiFile));
@@ -313,6 +326,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
             }
             answerMeta.setIsRefEmbedding(isRefEmbedding);
             answerMeta.setIsRefGraph(isRefGraph);
+            // 先完成 SSE 响应再落库，避免持久化失败影响前端体验
             sseEmitterHelper.sendComplete(user.getId(), sseEmitter, questionMeta, answerMeta, audioInfo);
             self.saveAfterAiResponse(user, askReq, retrieverWrappers, response, questionMeta, answerMeta, audioInfo);
         });
@@ -342,8 +356,10 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
      * @param filteredKb 有效的已关联的知识库
      * @param llmService 大模型服务
      * @param askReq     请求参数
+     * @return 检索器包装列表
      */
     private List<RetrieverWrapper> retrieve(Long convId, List<KbInfoResp> filteredKb, AbstractLLMService llmService, AskReq askReq) {
+        // 检索阶段使用固定温度，避免随机性影响召回稳定性
         ChatModel chatModel = llmService.buildChatLLM(
                 ChatModelBuilderProperties.builder()
                         .temperature(LLM_TEMPERATURE_DEFAULT)
@@ -361,7 +377,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         if (!filteredKb.isEmpty()) {
             List<String> kbUuids = filteredKb.stream().map(KbInfoResp::getUuid).toList();
             log.info("准备搜索相关联的知识库,kbUuids:{},question:{}", String.join(",", kbUuids), askReq.getPrompt());
-            //忽略知识库自身的设置如 [最大召回数量maxResult，最小命中分数minScore，角色设置，是否强行中断搜索] 等
+            // 忽略知识库自身配置，统一策略便于控制整体召回规模与一致性
             RetrieverCreateParam kbRetrieveParam = RetrieverCreateParam.builder()
                     .chatModel(chatModel)
                     .filter(new IsIn(KB_UUID, kbUuids)) //跨多个知识库查询
@@ -388,6 +404,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
                 });
             }
             try {
+                // 设置等待上限，防止单个检索阻塞整体响应
                 boolean awaitRet = countDownLatch.await(1, TimeUnit.MINUTES);
                 if (!awaitRet) {
                     log.warn("检索等待超时");
@@ -411,7 +428,9 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
     public List<ConversationMessage> listQuestionsByConvId(long convId, long maxId, int pageSize) {
         LambdaQueryWrapper<ConversationMessage> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(ConversationMessage::getConversationId, convId);
+        // 仅取父消息为 0 的问题消息，避免重复加载回答消息
         queryWrapper.eq(ConversationMessage::getParentMessageId, 0);
+        // 使用 id 作为分页边界，避免 UUID 无序带来的分页错乱
         queryWrapper.lt(ConversationMessage::getId, maxId);
         queryWrapper.eq(ConversationMessage::getIsDeleted, false);
         queryWrapper.last("limit " + pageSize);
@@ -429,6 +448,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
      * @param questionMeta 问题元信息
      * @param answerMeta  答案元信息
      * @param audioInfo   音频信息
+     * @return 无
      */
     @Transactional
     public void saveAfterAiResponse(User user, AskReq askReq, List<RetrieverWrapper> retrievers, LLMResponseContent response, PromptMeta questionMeta, AnswerMeta answerMeta, AudioInfo audioInfo) {
@@ -437,6 +457,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         String convUuid = askReq.getConversationUuid();
         String modelPlatform = askReq.getModelPlatform();
         String modelName = askReq.getModelName();
+        // 会话不存在时根据首条消息补建，兼容首次提问场景
         conversation = conversationService.lambdaQuery()
                 .eq(Conversation::getUuid, convUuid)
                 .eq(Conversation::getUserId, user.getId())
@@ -446,6 +467,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         // 判断是否为重新生成的问题
         ConversationMessage promptMsg;
         if (StringUtils.isNotBlank(askReq.getRegenerateQuestionUuid())) {
+            // 再生成场景复用原问题，避免重复创建问题消息
             promptMsg = getPromptMsgByQuestionUuid(askReq.getRegenerateQuestionUuid());
         } else {
             // 保存新的问题消息
@@ -495,6 +517,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
 
         // 写入短期记忆
         if (Boolean.TRUE.equals(conversation.getUnderstandContextEnable())) {
+            // 仅在启用上下文时写入短期记忆，避免无用数据占用
             MapDBChatMemoryStore mapDBChatMemoryStore = MapDBChatMemoryStore.getSingleton();
             List<ChatMessage> messages = mapDBChatMemoryStore.getMessages(askReq.getConversationUuid());
             List<ChatMessage> newMessages = new ArrayList<>(messages);
@@ -504,6 +527,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
 
         // 待办：部分视觉模型如 qwen2-vl-7b-instruct 不支持 JSON 结构返回内容，待处理
         if (!aiModel.getType().equalsIgnoreCase(ModelType.VISION)) {
+            // 视觉模型返回结构不稳定，暂不进入长期记忆以避免解析失败
             // 写入长期记忆
             longTermMemoryService.asyncAdd(conversation.getId(), modelPlatform, modelName, askReq.getPrompt(), response.getContent());
             // 待办：异步计算 token 消耗并更新用户日统计（包含长期记忆分析消耗）
@@ -518,6 +542,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
      * @param questionMeta 问题元信息
      * @param answerMeta   答案元信息
      * @param isFreeToken  是否免费额度
+     * @return 无
      */
     private void calcTodayCost(User user, Conversation conversation, PromptMeta questionMeta, AnswerMeta answerMeta, boolean isFreeToken) {
 
@@ -531,6 +556,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
 
             userDayCostService.appendCostToUser(user, todayTokenCost, isFreeToken);
         } catch (Exception e) {
+            // 计费失败不影响主流程，避免影响对话体验
             log.error("calcTodayCost error", e);
         }
     }
@@ -540,8 +566,10 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
      *
      * @param questionUuid 问题 UUID
      * @return 消息实体
+     * @throws BaseException 问题消息不存在时抛出异常
      */
     private ConversationMessage getPromptMsgByQuestionUuid(String questionUuid) {
+        // 通过问题 UUID 精确定位，避免上下文错配
         return this.lambdaQuery().eq(ConversationMessage::getUuid, questionUuid).oneOpt().orElseThrow(() -> new BaseException(B_MESSAGE_NOT_FOUND));
     }
 
@@ -572,6 +600,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         }
         ConversationMessage conversationMessage = this.lambdaQuery()
                 .eq(ConversationMessage::getAudioUuid, audioUuid)
+                // 管理员可绕过用户限制，便于审计与排障
                 .eq(!ThreadContext.getCurrentUser().getIsAdmin(), ConversationMessage::getUserId, ThreadContext.getCurrentUserId())
                 .eq(ConversationMessage::getIsDeleted, false)
                 .last("limit 1")
@@ -589,6 +618,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
      * @param wrappers 检索器列表
      * @param user     用户
      * @param msgId    消息 ID
+     * @return 无
      */
     private void createRef(List<RetrieverWrapper> wrappers, User user, Long msgId) {
         if (CollectionUtils.isEmpty(wrappers)) {
@@ -596,6 +626,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         }
         // 待办：记忆相关的引用也要存储到数据库
         for (RetrieverWrapper wrapper : wrappers) {
+            // 当前仅持久化知识库引用，避免把记忆检索混入引用表
             if (!RetrieveContentFrom.KNOWLEDGE_BASE.equals(wrapper.getContentFrom())) {
                 continue;
             }
@@ -613,6 +644,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
      * @param user             用户
      * @param messageId        消息id
      * @param embeddingToScore 嵌入向量id和分数的映射
+     * @return 无
      */
     public void createEmbeddingRefs(User user, Long messageId, Map<String, Double> embeddingToScore) {
         log.info("创建向量引用,userId:{},qaRecordId:{},embeddingToScore.size:{}", user.getId(), messageId, embeddingToScore.size());
@@ -633,6 +665,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
      * @param user      用户
      * @param messageId 消息id
      * @param graphDto  图谱引用数据传输对象
+     * @return 无
      */
     public void createGraphRefs(User user, Long messageId, RefGraphDto graphDto) {
         log.info("准备创建图谱引用,userId:{},qaRecordId:{},vertices.Size:{},edges.size:{}", user.getId(), messageId, graphDto.getVertices().size(), graphDto.getEdges().size());
@@ -662,15 +695,17 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
     private ChatModelRequestParams buildChatRequestParams(Conversation conversation, AskReq askReq) {
         ChatModelRequestParams.ChatModelRequestParamsBuilder builder = ChatModelRequestParams.builder();
         if (StringUtils.isNotBlank(conversation.getAiSystemMessage())) {
+            // 优先写入系统提示词，稳定模型行为
             builder.systemMessage(conversation.getAiSystemMessage());
         }
         // 是否启用历史消息
         if (Boolean.TRUE.equals(conversation.getUnderstandContextEnable())) {
             builder.memoryId(askReq.getConversationUuid());
         }
-        //如果用户问题已处理过，例如增加了召回的文档文段，则使用该增强的问题，否则使用用户的原始问题
+        // 优先使用增强后的问题，避免重复拼接导致提示词膨胀
         String prompt = StringUtils.isNotBlank(askReq.getProcessedPrompt()) ? askReq.getProcessedPrompt() : askReq.getPrompt();
         if (StringUtils.isNotBlank(askReq.getRegenerateQuestionUuid())) {
+            // 再生成问题沿用原问题的处理结果，保证上下文一致
             ConversationMessage lastMsg = getPromptMsgByQuestionUuid(askReq.getRegenerateQuestionUuid());
             prompt = StringUtils.isNotBlank(lastMsg.getProcessedRemark()) ? lastMsg.getProcessedRemark() : lastMsg.getRemark();
         }
@@ -680,6 +715,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         List<McpClient> mcpClients = new ArrayList<>();
         if (StringUtils.isNotBlank(conversation.getMcpIds())) {
             List<Long> mcpIds = stringToList(conversation.getMcpIds(), ",", Long::parseLong);
+            // 仅创建当前用户可用的 MCP 客户端，避免越权调用
             mcpClients = userMcpService.createMcpClients(conversation.getUserId(), mcpIds);
         }
         builder.mcpClients(mcpClients);
@@ -690,6 +726,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
         builder.returnThinking(returnThinking);
 
         // 是否开启网页搜索
+        // 显式传递开关，避免默认行为引起隐性成本
         builder.enableWebSearch(Boolean.TRUE.equals(conversation.getIsEnableWebSearch()));
 
         return builder.build();
@@ -704,7 +741,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
      */
     private int getAnswerContentType(Conversation conversation, AskReq askReq) {
         int answerContentType = conversation.getAnswerContentType();
-        //如果设置了响应内容类型为自动，并且用户输入是音频，则响应内容类型设置为音频
+        // 自动模式下若为语音输入，强制输出音频以匹配输入形态
         if (answerContentType == AdiConstant.ConversationConstant.ANSWER_CONTENT_TYPE_AUTO && StringUtils.isNotBlank(askReq.getAudioUuid())) {
             answerContentType = AdiConstant.ConversationConstant.ANSWER_CONTENT_TYPE_AUDIO;
         }
@@ -727,6 +764,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
                     memory.append(content.textSegment().text()).append("\n");
                 }
                 if (memory.isEmpty()) {
+                    // 明确写入占位文本，保持提示词结构稳定
                     memory.append("无\n");
                 } else {
                     memory.append("\n");
@@ -736,6 +774,7 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
                     knowledge.append(content.textSegment().text()).append("\n");
                 }
                 if (knowledge.isEmpty()) {
+                    // 明确写入占位文本，避免模型误判字段缺失
                     knowledge.append("无\n");
                 } else {
                     knowledge.append("\n");

@@ -8,7 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Content Retriever创建参数
+ * RetrieverCreate参数对象
  */
 @Builder
 @AllArgsConstructor
