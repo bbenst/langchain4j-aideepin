@@ -118,12 +118,15 @@ public class SSEEmitterHelper {
      * @return 无
      */
     public void call(SseAskParams sseAskParams, TriConsumer<LLMResponseContent, PromptMeta, AnswerMeta> completeCallback) {
+        // 先注册监听，确保流式过程中任何异常/断连都能触发统一清理
         String askingKey = registerEventStreamListener(sseAskParams);
         LLMContext.getServiceOrDefault(sseAskParams.getModelPlatform(), sseAskParams.getModelName()).streamingChat(sseAskParams, (response, promptMeta, answerMeta) -> {
             try {
+                // 将“完整回答结果”交给上层业务做最终封装与持久化
                 completeCallback.accept(response, promptMeta, answerMeta);
             } catch (Exception e) {
                 log.error("commonProcess error", e);
+                // 上层收尾异常时主动推送错误并关闭 SSE，避免前端无感知挂起
                 errorAndShutdown(e, sseAskParams.getSseEmitter());
             } finally {
                 // 无论成功或失败都清理占用标记，避免用户被长期锁定
@@ -143,7 +146,9 @@ public class SSEEmitterHelper {
         User user = sseAskParams.getUser();
         String askingKey = MessageFormat.format(RedisKeyConstant.USER_ASKING, user.getId());
         SseEmitter sseEmitter = sseAskParams.getSseEmitter();
+        // 仅记录日志，不在 completion 回调中做二次关闭，避免重复完成触发噪音
         sseEmitter.onCompletion(() -> log.info("response complete,uid:{}", user.getId()));
+        // 超时只记录告警，真正的关闭与清理由统一 finally 分支兜底
         sseEmitter.onTimeout(() -> log.warn("sseEmitter timeout,uid:{},on timeout:{}", user.getId(), sseEmitter.getTimeout()));
         sseEmitter.onError(
                 throwable -> {
@@ -176,10 +181,12 @@ public class SSEEmitterHelper {
             return;
         }
         try {
+            // 按协议发送 DONE 事件，通知前端结束流式渲染
             sseEmitter.send(SseEmitter.event().name(AdiConstant.SSEEventName.DONE).data(msg));
         } catch (IOException e) {
             throw new RuntimeException(e);
         } finally {
+            // 统一在 finally 中完成回收，确保发送异常时也不会残留占用状态
             COMPLETED_SSE.put(sseEmitter, Boolean.TRUE);
             delSseRequesting(userId);
             sseEmitter.complete();
@@ -196,8 +203,10 @@ public class SSEEmitterHelper {
      * @return 无
      */
     public void sendComplete(long userId, SseEmitter sseEmitter, PromptMeta questionMeta, AnswerMeta answerMeta, AudioInfo audioInfo) {
+        // 将问答 token、答案 UUID、音频信息打包为一次 meta 负载，减少前端拼装复杂度
         ChatMeta chatMeta = new ChatMeta(questionMeta, answerMeta, audioInfo);
         String meta = JsonUtil.toJson(chatMeta).replace("\r\n", "");
+        // 延续历史协议：DONE 事件内以 META 前缀携带元信息
         this.sendComplete(userId, sseEmitter, " " + AdiConstant.SSEEventName.META + meta);
     }
 
@@ -387,6 +396,7 @@ public class SSEEmitterHelper {
         int inputTokenCount = response.metadata().tokenUsage().totalTokenCount();
         int outputTokenCount = response.metadata().tokenUsage().outputTokenCount();
         log.info("StreamingChatModel token cost,uuid:{},inputTokenCount:{},outputTokenCount:{}", uuid, inputTokenCount, outputTokenCount);
+        // 先缓存 token 用量，便于后续异步链路按 uuid 追溯计费与审计
         LLMTokenUtil.cacheTokenUsage(SpringUtil.getBean(StringRedisTemplate.class), uuid, response.metadata().tokenUsage());
 
         PromptMeta questionMeta = new PromptMeta(inputTokenCount, uuid);
@@ -415,10 +425,12 @@ public class SSEEmitterHelper {
                     errorMsg = openAiError.getError().getMessage();
                 }
             }
+            // 将可读错误透传给前端，避免仅在服务端日志可见
             sseEmitter.send(SseEmitter.event().name(AdiConstant.SSEEventName.ERROR).data(errorMsg));
         } catch (IOException e) {
             log.error("sse error", e);
         } finally {
+            // 错误结束也必须标记完成，避免后续分片继续写入已失效连接
             COMPLETED_SSE.put(sseEmitter, Boolean.TRUE);
             sseEmitter.complete();
         }

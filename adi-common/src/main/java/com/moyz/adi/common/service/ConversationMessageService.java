@@ -294,12 +294,14 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
                         .temperature(conversation.getLlmTemperature())
                         .build()
         );
+        // 回调只会在流式回答完整结束后触发，用于统一收敛“结果补全 + 元信息回传”
         sseEmitterHelper.call(sseAskParams, (response, questionMeta, answerMeta) -> {
 
             AudioInfo audioInfo = null;
             if (StringUtils.isNotBlank(response.getAudioPath())) {
 
                 audioInfo = new AudioInfo();
+                // 回填音频时长，便于前端展示播放进度与历史记录摘要
                 MultimediaInfo multimediaInfo = LocalFileUtil.getAudioFileInfo(response.getAudioPath());
                 if (null != multimediaInfo) {
                     audioInfo.setDuration((int) multimediaInfo.getDuration() / 1000);
@@ -314,13 +316,16 @@ public class ConversationMessageService extends ServiceImpl<ConversationMessageM
             boolean isRefGraph = false;
             for (RetrieverWrapper wrapper : retrieverWrappers) {
                 // 待办：记忆相关的引用也要存储到数据库
+                // 当前仅统计知识库来源的引用命中，避免把会话记忆误标记为外部知识引用
                 if (!RetrieveContentFrom.KNOWLEDGE_BASE.equals(wrapper.getContentFrom())) {
                     continue;
                 }
                 if (wrapper.getRetriever() instanceof AdiEmbeddingStoreContentRetriever embeddingStoreContentRetriever) {
+                    // 只要召回到任一向量片段即视为命中，供前端显示“引用了知识库向量”
                     isRefEmbedding = !embeddingStoreContentRetriever.getRetrievedEmbeddingToScore().isEmpty();
                 } else if (wrapper.getRetriever() instanceof GraphStoreContentRetriever graphStoreContentRetriever) {
                     RefGraphDto graphDto = graphStoreContentRetriever.getGraphRef();
+                    // 图顶点或边任一非空即可认定命中图谱引用
                     isRefGraph = !graphDto.getVertices().isEmpty() || !graphDto.getEdges().isEmpty();
                 }
             }

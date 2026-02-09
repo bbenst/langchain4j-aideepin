@@ -149,6 +149,7 @@ public abstract class AbstractLLMService extends CommonModelService {
         ChatModelRequestParams httpRequestParams = params.getHttpRequestParams();
         ChatModelBuilderProperties modelProperties = params.getModelProperties();
         log.info("sseChat,messageId:{}", httpRequestParams.getMemoryId());
+        // 统一用流式模型实例承接后续分片、思考过程与工具调用递归
         StreamingChatModel streamingChatModel = buildStreamingChatModel(modelProperties);
 
         ChatRequest chatRequest = createChatRequest(httpRequestParams);
@@ -176,6 +177,7 @@ public abstract class AbstractLLMService extends CommonModelService {
                     byte[] frameBytes = new byte[audioFrame.remaining()];
                     audioFrame.get(frameBytes);
                     String base64Audio = Base64.getEncoder().encodeToString(frameBytes);
+                    // 增量音频帧实时透传前端，降低“文本结束后才出音频”的感知延迟
                     SSEEmitterHelper.sendAudio(params.getSseEmitter(), base64Audio);
                 }, jobInfo::setFilePath, (String errorMsg) -> log.error("tts error: {}", errorMsg));
             }
@@ -196,10 +198,12 @@ public abstract class AbstractLLMService extends CommonModelService {
      * @param params 参数对象，包含流式聊天所需的所有信息
      */
     private void innerStreamingChat(InnerStreamChatParams params) {
+        // 预构建工具映射，避免每个分片重复解析工具定义
         Map<ToolSpecification, McpClient> toolSpecificationMcpClientMap = getRequestTools(params.getMcpClients());
         params.getStreamingChatModel().chat(params.getChatRequest(), new StreamingChatResponseHandler() {
             @Override
             public void onPartialResponse(String partialResponse) {
+                // 分片文本先推送到前端，再喂给 TTS，保证文本与音频时间线尽量一致
                 SSEEmitterHelper.parseAndSendPartialMsg(params.getSseEmitter(), partialResponse);
                 ttsOnPartialMessage(params, partialResponse);
             }
@@ -225,6 +229,7 @@ public abstract class AbstractLLMService extends CommonModelService {
                             .messages(messages)
                             .parameters(params.getChatRequest().parameters())
                             .build());
+                    // 工具调用结果回灌后递归继续对话，直到模型返回最终自然语言答案
                     // recursive call now with tool calling results
                     innerStreamingChat(params);
                 } else {
@@ -232,13 +237,16 @@ public abstract class AbstractLLMService extends CommonModelService {
                     String filePath = null != jobInfo ? jobInfo.getFilePath() : null;
                     //结束整个对话任务
                     Pair<PromptMeta, AnswerMeta> pair = SSEEmitterHelper.calculateToken(response, params.getUuid());
+                    // 仅在最终完成时触发 consumer，确保上层拿到的是可持久化的完整结果
                     params.getConsumer().accept(new LLMResponseContent(response.aiMessage().thinking(), response.aiMessage().text(), filePath), pair.getLeft(), pair.getRight());
+                    // 终态分支统一关闭 MCP 客户端，避免长连接泄漏
                     closeMcpClients(params.getMcpClients());
                 }
             }
 
             @Override
             public void onError(Throwable error) {
+                // 错误分支同样要释放 MCP 资源，防止后续请求复用到脏连接
                 SSEEmitterHelper.errorAndShutdown(error, params.getSseEmitter());
                 closeMcpClients(params.getMcpClients());
             }
