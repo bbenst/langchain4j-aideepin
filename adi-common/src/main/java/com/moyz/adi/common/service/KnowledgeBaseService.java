@@ -401,13 +401,19 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
      * @return SSE 连接
      */
     public SseEmitter sseAsk(String qaRecordUuid) {
+        // 先进行问答限额校验，避免无效 SSE 连接占用资源
         checkRequestTimesOrThrow();
+        // 设置统一超时时间，防止长连接无限挂起
         SseEmitter sseEmitter = new SseEmitter(SSE_TIMEOUT);
+        // 从线程上下文获取用户，确保请求身份一致
         User user = ThreadContext.getCurrentUser();
+        // 若用户校验或并发限制未通过，直接返回已完成的 emitter
         if (!sseEmitterHelper.checkOrComplete(user, sseEmitter)) {
             return sseEmitter;
         }
+        // 先建立 SSE 通道，再异步执行耗时检索与模型调用
         sseEmitterHelper.startSse(user, sseEmitter);
+        // 通过 self 触发代理以保证 @Async 生效
         self.retrieveAndPushToLLM(user, sseEmitter, qaRecordUuid);
         return sseEmitter;
     }
@@ -451,15 +457,22 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
     }
 
     /**
-     * 知识库问答限额判断
+     * 知识库问答限额判断。
+     *
+     * @return 无
+     * @throws BaseException 超出限额时抛出异常
      */
     private void checkRequestTimesOrThrow() {
+        // 以“用户 + 日期”为维度计数，保证按天限额统计
         String key = MessageFormat.format(RedisKeyConstant.AQ_ASK_TIMES, ThreadContext.getCurrentUserId(), LocalDateTimeUtil.format(LocalDateTime.now(), PATTERN_YYYY_MM_DD));
+        // 获取当前已请求次数与系统配置的每日限额
         String askTimes = stringRedisTemplate.opsForValue().get(key);
         String askQuota = SysConfigService.getByKey(QUOTA_BY_QA_ASK_DAILY);
+        // 超过限额直接拒绝，避免后续链路浪费资源
         if (null != askQuota && null != askTimes && Integer.parseInt(askTimes) >= Integer.parseInt(askQuota)) {
             throw new BaseException(A_QA_ASK_LIMIT);
         }
+        // 记录本次请求并设置过期时间，避免旧统计长期占用
         stringRedisTemplate.opsForValue().increment(key);
         stringRedisTemplate.expire(key, Duration.ofDays(1));
     }
@@ -470,14 +483,18 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
      * @param user         当前提问的用户
      * @param sseEmitter   sse emitter
      * @param qaRecordUuid 知识库uuid
+     * @return 无
      */
     @Async
     public void retrieveAndPushToLLM(User user, SseEmitter sseEmitter, String qaRecordUuid) {
+        // 异步线程记录关键参数，便于追踪与排查问题
         log.info("retrieveAndPushToLLM,qaRecordUuid:{},userId:{}", qaRecordUuid, user.getId());
+        // 预先加载问答记录、知识库与模型配置，保证参数一致性
         KnowledgeBaseQa qaRecord = knowledgeBaseQaRecordService.getOrThrow(qaRecordUuid);
         KnowledgeBase knowledgeBase = getOrThrow(qaRecord.getKbUuid());
         AiModel aiModel = aiModelService.getByIdOrThrow(qaRecord.getAiModelId());
 
+        // 使用知识库配置的估算器，确保 token 统计口径一致
         TokenEstimatorThreadLocal.setTokenEstimator(knowledgeBase.getIngestTokenEstimator());
 
         int maxInputTokens = aiModel.getMaxInputTokens();
@@ -487,10 +504,12 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
             maxResults = EmbeddingRag.getRetrieveMaxResults(qaRecord.getQuestion(), maxInputTokens);
         }
 
+        // 组装 SSE 请求参数，确保与问答记录绑定
         SseAskParams sseAskParams = new SseAskParams();
         sseAskParams.setUuid(qaRecord.getUuid());
         sseAskParams.setHttpRequestParams(
                 ChatModelRequestParams.builder()
+                        // 使用“知识库UUID_用户UUID”隔离不同用户与知识库的记忆上下文
                         .memoryId(qaRecord.getKbUuid() + "_" + user.getUuid())
                         .systemMessage(knowledgeBase.getQuerySystemMessage())
                         .userMessage(qaRecord.getQuestion())
@@ -498,20 +517,26 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         );
         sseAskParams.setModelProperties(
                 ChatModelBuilderProperties.builder()
+                        // 使用知识库侧温度配置保持回答风格一致
                         .temperature(knowledgeBase.getQueryLlmTemperature())
                         .build()
         );
         sseAskParams.setSseEmitter(sseEmitter);
         sseAskParams.setModelName(aiModel.getName());
         sseAskParams.setUser(user);
+        // 无可用召回数量时，根据严格/宽松模式决定是否直接返回错误
         if (maxResults == 0) {
             log.info("用户问题过长，无需再召回文档，严格模式下直接返回异常提示,宽松模式下接着请求LLM");
             if (Boolean.TRUE.equals(knowledgeBase.getIsStrict())) {
+                // 严格模式下直接结束 SSE，避免继续消耗资源
                 sseEmitterHelper.sendErrorAndComplete(user.getId(), sseEmitter, "提问内容过长，最多不超过 " + maxInputTokens + " tokens");
+                // 清理线程变量，避免污染后续请求
                 TokenEstimatorThreadLocal.clearTokenEstimator();
             } else {
+                // 宽松模式下直接调用模型生成答案，仍然回写记录
                 sseEmitterHelper.call(sseAskParams, (response, questionMeta, answerMeta) -> {
                             sseEmitterHelper.sendComplete(user.getId(), sseEmitter);
+                            // 回写问答记录与计费信息，保持统计一致
                             updateQaRecord(
                                     UpdateQaParams.builder()
                                             .user(user)
@@ -521,16 +546,19 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
                                             .response(response.getContent())
                                             .isTokenFree(aiModel.getIsFree())
                                             .build());
+                            // 清理线程变量，避免污染后续请求
                             TokenEstimatorThreadLocal.clearTokenEstimator();
                         }
                 );
             }
         } else {
             log.info("进行RAG请求,maxResults:{}", maxResults);
+            // 使用知识库配置的模型构建检索器，确保与索引一致
             ChatModel chatModel = LLMContext.getServiceById(knowledgeBase.getIngestModelId(), true).buildChatLLM(
                     ChatModelBuilderProperties.builder()
                             .temperature(knowledgeBase.getQueryLlmTemperature())
                             .build());
+            // 仅检索当前知识库，避免跨库召回影响回答
             RetrieverCreateParam createParam = RetrieverCreateParam.builder()
                     .chatModel(chatModel)
                     .filter(new IsEqualTo(AdiConstant.MetadataKey.KB_UUID, qaRecord.getKbUuid()))
@@ -541,8 +569,10 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
             CompositeRag compositeRag = new CompositeRag(KNOWLEDGE_BASE);
             List<RetrieverWrapper> retrieverWrappers = compositeRag.createRetriever(createParam);
             List<ContentRetriever> retrievers = retrieverWrappers.stream().map(RetrieverWrapper::getRetriever).toList();
+            // 组合检索执行 RAG，并在回调中完成收尾与统计
             compositeRag.ragChat(retrievers, sseAskParams, (response, promptMeta, answerMeta) -> {
                         sseEmitterHelper.sendComplete(user.getId(), sseAskParams.getSseEmitter());
+                        // 回写问答记录、引用与成本，保证可追溯
                         updateQaRecord(
                                 UpdateQaParams.builder()
                                         .user(user)
@@ -552,6 +582,7 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
                                         .response(response)
                                         .isTokenFree(aiModel.getIsFree())
                                         .build());
+                        // 清理线程变量，避免污染后续请求
                         TokenEstimatorThreadLocal.clearTokenEstimator();
                     }
             );
@@ -562,14 +593,17 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
      * 更新问答记录并写入消耗统计。
      *
      * @param updateQaParams 更新参数
+     * @return 无
      */
     private void updateQaRecord(UpdateQaParams updateQaParams) {
 
+        // 从 Redis 汇总本次请求的 token 消耗，保证计费与统计一致
         Pair<Integer, Integer> inputOutputTokenCost = LLMTokenUtil.calAllTokenCostByUuid(stringRedisTemplate, updateQaParams.getSseAskParams().getUuid());
 
         KnowledgeBaseQa qaRecord = updateQaParams.getQaRecord();
         User user = updateQaParams.getUser();
 
+        // 只更新必要字段，避免覆盖未变更数据
         KnowledgeBaseQa updateRecord = new KnowledgeBaseQa();
         updateRecord.setId(qaRecord.getId());
         updateRecord.setPrompt(updateQaParams.getSseAskParams().getHttpRequestParams().getUserMessage());
@@ -578,8 +612,9 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
         updateRecord.setAnswerTokens(inputOutputTokenCost.getRight());
         knowledgeBaseQaRecordService.updateById(updateRecord);
 
+        // 创建引用并写入成本统计，便于后续溯源与计费
         createRef(updateQaParams.getRetrievers(), user, qaRecord.getId());
-        //用户本次请求消耗的token数指的是整个RAG过程中消耗的token数量，其中可能涉及到多次LLM请求
+        // 用户本次请求消耗的 token 数指的是整个 RAG 过程中消耗的 token 数量，其中可能涉及多次 LLM 请求
         int allToken = inputOutputTokenCost.getLeft() + inputOutputTokenCost.getRight();
         log.info("用户{}本次请示消耗总token:{}", user.getName(), allToken);
         if (allToken > 0) {
@@ -593,12 +628,15 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
      * @param retrievers 召回器
      * @param user       用户
      * @param qaId       问答id
+     * @return 无
      */
     private void createRef(List<ContentRetriever> retrievers, User user, Long qaId) {
+        // 无召回器时无需写入引用，避免无意义的数据库操作
         if (CollectionUtils.isEmpty(retrievers)) {
             return;
         }
         for (ContentRetriever retriever : retrievers) {
+            // 根据召回器类型写入不同的引用，保证溯源结构清晰
             if (retriever instanceof AdiEmbeddingStoreContentRetriever embeddingRetriever) {
                 knowledgeBaseQaRecordService.createEmbeddingRefs(user, qaId, embeddingRetriever.getRetrievedEmbeddingToScore());
             } else if (retriever instanceof GraphStoreContentRetriever graphRetriever) {

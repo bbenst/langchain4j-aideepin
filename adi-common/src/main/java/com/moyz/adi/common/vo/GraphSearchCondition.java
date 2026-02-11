@@ -9,7 +9,7 @@ import lombok.experimental.SuperBuilder;
 import java.util.List;
 
 /**
- * 图谱搜索Condition对象
+ * 图谱搜索条件对象。
  */
 @SuperBuilder
 @NoArgsConstructor
@@ -17,11 +17,11 @@ import java.util.List;
 @Data
 public class GraphSearchCondition {
     /**
-     * names
+     * 名称列表。
      */
     protected List<String> names;
     /**
-     * metadataFilter
+     * 元数据过滤条件。
      */
     protected Filter metadataFilter;
 

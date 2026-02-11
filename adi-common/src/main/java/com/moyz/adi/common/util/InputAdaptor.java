@@ -27,6 +27,7 @@ public class InputAdaptor {
      * @return 校验结果
      */
     public static InputAdaptorMsg isQuestionValid(String userQuestion, int maxInputTokens) {
+        // 默认使用线程上下文的估算器，保证与当前知识库配置一致
         return isQuestionValid(userQuestion, maxInputTokens, TokenEstimatorFactory.create(TokenEstimatorThreadLocal.getTokenEstimator()));
     }
     /**
@@ -41,6 +42,7 @@ public class InputAdaptor {
         InputAdaptorMsg result = new InputAdaptorMsg();
         result.setTokenTooMuch(InputAdaptorMsg.TOKEN_TOO_MUCH_NOT);
 
+        // 先估算问题 token 数，超过窗口则直接标记
         int questionLength = tokenizer.estimateTokenCountInText(userQuestion);
         result.setUserQuestionTokenCount(questionLength);
         if (questionLength > maxInputTokens) {
@@ -96,6 +98,7 @@ public class InputAdaptor {
 //
 //        return Metadata.from(metadata.userMessage(), metadata.chatMemoryId(), validMemories);
 
+        // 已废弃方法，保留占位实现，避免误用
         return null;
     }
 
@@ -115,10 +118,11 @@ public class InputAdaptor {
         }
         String tokenizerName = TokenEstimatorThreadLocal.getTokenEstimator();
         TokenCountEstimator tokenizer = TokenEstimatorFactory.create(tokenizerName);
-        //计算原始用户问题及召回文档的长度,如果太长，丢弃部分或全部文档
+        // 计算原始问题与召回文档的 token 总量，超限则逐步丢弃
         int allRetrievedDocsTokenCount = 0;
         List<Content> validContents = new ArrayList<>();
         for (Content content : contents) {
+            // 按文档粒度累加预算，确保不超过模型窗口
             int currentDocTokenCount = tokenizer.estimateTokenCountInText(content.textSegment().text());
             if (questionLength + allRetrievedDocsTokenCount + currentDocTokenCount < maxInputTokens) {
                 allRetrievedDocsTokenCount += currentDocTokenCount;
@@ -143,6 +147,7 @@ public class InputAdaptor {
     public static List<ChatMessage> adjustMessages(List<ChatMessage> messages, int maxInputTokens) {
         String tokenizerName = TokenEstimatorThreadLocal.getTokenEstimator();
         TokenCountEstimator tokenizer = TokenEstimatorFactory.create(tokenizerName);
+        // 兼容历史实现，保留方法签名以避免外部调用失败
         int messageSize = messages.size();
         ChatMessage latestMessage = messages.get(messageSize - 1);
         List<ChatMessage> result = new ArrayList<>();

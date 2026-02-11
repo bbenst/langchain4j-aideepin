@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 import java.util.Map;
 
 /**
- * 图谱边对象
+ * 图谱边对象。
  */
 @NoArgsConstructor
 @AllArgsConstructor
@@ -17,56 +17,60 @@ import java.util.Map;
 @Data
 public class GraphEdge {
     /**
-     * 主键ID
+     * 主键 ID。
      */
     private String id;
     /**
-     * label
+     * 标签。
      */
     private String label;
     /**
-     * weight
+     * 权重。
      */
     private Double weight;
     /**
-     * 描述
+     * 描述。
      */
     private String description;
     /**
-     * textSegmentID
+     * 文本段 ID。
      */
     @JsonProperty("text_segment_id")
     private String textSegmentId;
     /**
-     * metadata
+     * 元数据。
      */
     private Map<String, Object> metadata;
 
-    //Source vertex
     /**
-     * 开始ID
+     * 源顶点信息。
+     */
+    /**
+     * 起始顶点 ID。
      */
     private String startId;
     /**
-     * source名称
+     * 源名称。
      */
     private String sourceName;
     /**
-     * sourceMetadata
+     * 源元数据。
      */
     private Map<String, Object> sourceMetadata;
 
-    //Target vertex
     /**
-     * 结束ID
+     * 目标顶点信息。
+     */
+    /**
+     * 目标顶点 ID。
      */
     private String endId;
     /**
-     * target名称
+     * 目标名称。
      */
     private String targetName;
     /**
-     * targetMetadata
+     * 目标元数据。
      */
     private Map<String, Object> targetMetadata;
 }

@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 图谱边搜索对象
+ * 图谱边搜索对象。
  */
 @Builder
 @Data
@@ -14,24 +14,24 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class GraphEdgeSearch {
     /**
-     * source
+     * 源顶点搜索条件。
      */
     private GraphSearchCondition source;
     /**
-     * target
+     * 目标顶点搜索条件。
      */
     private GraphSearchCondition target;
     /**
-     * 边
+     * 边搜索条件。
      */
     private GraphSearchCondition edge;
     /**
-     * 限制
+     * 返回数量限制。
      */
     @Builder.Default
     private Integer limit = 10;
     /**
-     * 最大ID
+     * 最大 ID（用于分页或范围控制）。
      */
     @Builder.Default
     private Long maxId = Long.MAX_VALUE;

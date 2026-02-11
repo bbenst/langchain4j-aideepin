@@ -60,11 +60,14 @@ public class EmbeddingRag implements IRAGService {
      * @param overlap 重叠 token 数
      * @param tokenEstimator token 估算器名称
      * @param ChatModel ChatModel 实例（兼容接口）
+     * @return 无
      */
     @Override
     public void ingest(Document document, int overlap, String tokenEstimator, ChatModel ChatModel) {
         log.info("EmbeddingRag ingest,TokenCountEstimator:{}", tokenEstimator);
+        // 使用递归分块策略，兼顾段落完整性与 token 上限
         DocumentSplitter documentSplitter = DocumentSplitters.recursive(RAG_MAX_SEGMENT_SIZE_IN_TOKENS, overlap, TokenEstimatorFactory.create(tokenEstimator));
+        // 通过统一的 Ingestor 完成分块、向量化与入库
         EmbeddingStoreIngestor embeddingStoreIngestor = EmbeddingStoreIngestor.builder()
                 .documentSplitter(documentSplitter)
                 .embeddingModel(embeddingModel)
@@ -100,18 +103,23 @@ public class EmbeddingRag implements IRAGService {
      * @return 召回的文档数量上限
      */
     public static int getRetrieveMaxResults(String userQuestion, int maxInputTokens) {
+        // 模型未限制窗口时，使用系统默认上限
         if (maxInputTokens == 0) {
             return RAG_RETRIEVE_NUMBER_MAX;
         }
         InputAdaptorMsg inputAdaptorMsg = InputAdaptor.isQuestionValid(userQuestion, maxInputTokens);
         if (inputAdaptorMsg.getTokenTooMuch() == TOKEN_TOO_MUCH_QUESTION) {
+            // 问题本身已超出窗口时，返回 0 表示不再召回
             log.warn("用户问题太长了，没有足够的token数量留给召回的内容");
             return 0;
         } else {
+            // 用剩余 token 预算估算可容纳的文档段数量
             int maxRetrieveDocLength = maxInputTokens - inputAdaptorMsg.getUserQuestionTokenCount();
             if (maxRetrieveDocLength > RAG_RETRIEVE_NUMBER_MAX * RAG_MAX_SEGMENT_SIZE_IN_TOKENS) {
+                // 超过系统上限时直接按最大值截断
                 return RAG_RETRIEVE_NUMBER_MAX;
             } else {
+                // 按块大小换算为可召回的段数量
                 return maxRetrieveDocLength / RAG_MAX_SEGMENT_SIZE_IN_TOKENS;
             }
         }

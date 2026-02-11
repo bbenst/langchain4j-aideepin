@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.util.Map;
 
 /**
- * 图谱边Get对象
+ * 图谱边查询参数对象。
  */
 @Builder
 @Data
@@ -16,19 +16,19 @@ import java.util.Map;
 @NoArgsConstructor
 public class GraphEdgeGet {
     /**
-     * source
+     * 源名称。
      */
     private String source;
     /**
-     * target
+     * 目标名称。
      */
     private String target;
     /**
-     * sourceMetadata
+     * 源元数据。
      */
     private Map<String, Object> sourceMetadata;
     /**
-     * targetMetadata
+     * 目标元数据。
      */
     private Map<String, Object> targetMetadata;
 

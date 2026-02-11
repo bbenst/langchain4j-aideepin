@@ -5,7 +5,7 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 /**
- * 图谱Vertex搜索对象
+ * 图谱顶点搜索对象。
  */
 @EqualsAndHashCode(callSuper = true)
 @SuperBuilder
@@ -14,21 +14,21 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 public class GraphVertexSearch extends GraphSearchCondition {
     /**
-     * label
+     * 标签。
      */
     private String label;
     /**
-     * textSegmentID
+     * 文本段 ID。
      */
     @JsonProperty("text_segment_id")
     private String textSegmentId;
     /**
-     * 限制
+     * 返回数量限制。
      */
     @Builder.Default
     private Integer limit = 10;
     /**
-     * 最大ID
+     * 最大 ID（用于分页或范围控制）。
      */
     @Builder.Default
     private Long maxId = Long.MAX_VALUE;

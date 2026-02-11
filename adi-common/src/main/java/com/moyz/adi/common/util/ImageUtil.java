@@ -56,6 +56,7 @@ public class ImageUtil {
      *
      * @param rbgPath  RGB 图片路径
      * @param argbPath RGBA 图片输出路径
+     * @return 无
      */
     public static void rgbConvertToRgba(String rbgPath, String argbPath) {
         log.info("RGB convert to RGBA, rbgPath:{}, argbPath:{}", rbgPath, argbPath);
@@ -71,7 +72,7 @@ public class ImageUtil {
             g.drawImage(rgbImage, 0, 0, null);
             g.dispose();
 
-            // 保存RGBA图片
+            // 保存 RGBA 图片，保留透明度信息
             ImageIO.write(rgbaImage, "png", new File(argbPath));
 
         } catch (IOException e) {
@@ -84,6 +85,7 @@ public class ImageUtil {
      * @param file     原始图片文件
      * @param rgbaPath RGBA 图片输出路径
      * @return RGBA 文件或原文件
+     * @throws RuntimeException 读取或写入异常时抛出
      */
     public static File rgbConvertToRgba(File file, String rgbaPath) {
         try {
@@ -92,6 +94,7 @@ public class ImageUtil {
             // 获取图片的颜色模型
             int colorModel = image.getColorModel().getColorSpace().getType();
             if (colorModel != BufferedImage.TYPE_INT_ARGB) {
+                // 非 ARGB 时才转换，避免重复写盘
                 // 创建一个RGBA图片，与原始RGB图片大小相同
                 BufferedImage rgbaImage = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_ARGB);
 
@@ -107,6 +110,7 @@ public class ImageUtil {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        // 原图已是 ARGB，直接返回避免冗余处理
         return file;
     }
 
@@ -126,6 +130,7 @@ public class ImageUtil {
             for (String imageUrl : imageUrls) {
                 log.info("urlsToImageContent,imageUrl:{}", imageUrl);
                 if (!imageUrl.contains("http") && imageUrl.length() == 32) {
+                    // 本地图片以短码存储时，读取文件并转为 Base64 透传
                     String absolutePath = SpringUtil.getBean(FileService.class).getImagePath(imageUrl);
                     File file = new File(absolutePath);
                     MimetypesFileTypeMap mimetypesFileTypeMap = new MimetypesFileTypeMap();
@@ -136,6 +141,7 @@ public class ImageUtil {
                         result.add(ImageContent.from(Base64.getEncoder().encodeToString(fileBytes), mimeType));
                     }
                 } else {
+                    // 远程图片直接使用 URL，避免服务端二次下载
                     result.add(ImageContent.from(imageUrl));
                 }
             }
@@ -152,6 +158,7 @@ public class ImageUtil {
      * @param thumbWidth  目标宽度
      * @param thumbHeight 目标高度
      * @param quality     质量参数（暂不参与处理）
+     * @return 无
      * @throws IOException 读取或写入异常
      */
     public static void createThumbnail(String inputFile, String outputFile, int thumbWidth, int thumbHeight, int quality) throws IOException {
@@ -160,7 +167,7 @@ public class ImageUtil {
         int imageWidth = image.getWidth();
         int imageHeight = image.getHeight();
 
-        // 计算缩放比例
+        // 计算缩放比例，保持原始宽高比
         double thumbRatio = (double) thumbWidth / (double) thumbHeight;
         double imageRatio = (double) imageWidth / (double) imageHeight;
         if (thumbRatio < imageRatio) {
@@ -169,7 +176,7 @@ public class ImageUtil {
             thumbWidth = (int) (thumbHeight * imageRatio);
         }
 
-        // 创建缩略图
+        // 创建缩略图并平滑缩放
         Image thumbnail = image.getScaledInstance(thumbWidth, thumbHeight, Image.SCALE_SMOOTH);
         BufferedImage outputImage = new BufferedImage(thumbWidth, thumbHeight, BufferedImage.TYPE_INT_RGB);
         outputImage.getGraphics().drawImage(thumbnail, 0, 0, null);
@@ -201,13 +208,17 @@ public class ImageUtil {
      * @param model  模型名称
      * @param apiKey API Key
      * @return 图片 URL
+     * @throws IllegalArgumentException 无法解析图片地址时抛出异常
+     * @throws RuntimeException OSS 上传失败时抛出异常
      */
     public static String imageUrl(dev.langchain4j.data.image.Image image, String model, String apiKey) {
         String imageUrl;
 
         if (image.url() != null) {
+            // 优先使用已存在的 URL，避免重复上传
             imageUrl = image.url().toString();
         } else if (Utils.isNotNullOrBlank(image.base64Data())) {
+            // 没有 URL 时上传 base64 数据到 OSS
             String filePath = saveDataAsTemporaryFile(image.base64Data(), image.mimeType());
             try {
                 imageUrl = OSSUtils.upload(model, filePath, apiKey);
@@ -226,6 +237,7 @@ public class ImageUtil {
      * @param base64Data Base64 数据
      * @param mimeType   MIME 类型
      * @return 临时文件路径
+     * @throws RuntimeException 写入临时文件失败时抛出异常
      */
     public static String saveDataAsTemporaryFile(String base64Data, String mimeType) {
         String tmpDir = System.getProperty("java.io.tmpdir", "/tmp");
@@ -240,6 +252,7 @@ public class ImageUtil {
         }
 
         Path tmpFilePath = Paths.get(tmpDir, tmpFileName);
+        // Base64 解码并写入临时文件
         byte[] data = Base64.getDecoder().decode(base64Data);
         try {
             Files.copy(new ByteArrayInputStream(data), tmpFilePath, StandardCopyOption.REPLACE_EXISTING);
@@ -256,6 +269,7 @@ public class ImageUtil {
      */
     public static boolean isImage(String fileExt) {
         List<String> imageExtensions = Arrays.asList("jpg", "jpeg", "png", "gif", "bmp", "webp");
+        // 统一转小写进行匹配
         return imageExtensions.contains(fileExt.toLowerCase());
     }
 }

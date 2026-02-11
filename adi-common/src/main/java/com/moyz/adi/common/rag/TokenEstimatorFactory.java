@@ -25,13 +25,17 @@ public class TokenEstimatorFactory {
      */
     public static TokenCountEstimator create(String tokenEstimator) {
         if (StringUtils.isBlank(tokenEstimator)) {
+            // 未指定估算器时，使用默认 OpenAI 估算器保证可用性
             return new OpenAiTokenCountEstimator(OpenAiChatModelName.GPT_3_5_TURBO);
         }
         if (AdiConstant.TokenEstimator.OPENAI.equals(tokenEstimator)) {
+            // 显式指定 OpenAI 时直接使用官方估算器
             return new OpenAiTokenCountEstimator(OpenAiChatModelName.GPT_3_5_TURBO);
         } else if (AdiConstant.TokenEstimator.HUGGING_FACE.equals(tokenEstimator)) {
+            // HuggingFace 使用通用分词估算器
             return new HuggingFaceTokenCountEstimator();
         } else if (AdiConstant.TokenEstimator.QWEN.equals(tokenEstimator)) {
+            // Qwen 优先取已注册的 DashScope 文本模型估算器
             AbstractLLMService llmService = LLMContext.getAllServices()
                     .stream()
                     .filter(item -> {
@@ -42,10 +46,12 @@ public class TokenEstimatorFactory {
             if (null != llmService) {
                 return llmService.getTokenEstimator();
             } else {
+                // 未找到 Qwen 估算器时回退到 OpenAI 估算器
                 log.warn("没有找到Qwen模型的tokenizer，使用默认的OpenAiTokenizer");
                 return new OpenAiTokenCountEstimator(OpenAiChatModelName.GPT_3_5_TURBO);
             }
         }
+        // 兜底使用 OpenAI 估算器，确保流程不中断
         return new OpenAiTokenCountEstimator(OpenAiChatModelName.GPT_3_5_TURBO);
     }
 

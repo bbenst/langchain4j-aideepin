@@ -110,9 +110,11 @@ public class KnowledgeBaseQaService extends ServiceImpl<KnowledgeBaseQaRecordMap
      * @param user             用户
      * @param qaRecordId       记录 ID
      * @param embeddingToScore 向量与分数映射
+     * @return 无
      */
     public void createEmbeddingRefs(User user, Long qaRecordId, Map<String, Double> embeddingToScore) {
         log.info("更新向量引用,userId:{},qaRecordId:{},embeddingToScore.size:{}", user.getId(), qaRecordId, embeddingToScore.size());
+        // 逐条持久化引用分数，便于后续溯源与排序
         for (Map.Entry<String, Double> entry : embeddingToScore.entrySet()) {
             String embeddingId = entry.getKey();
             KnowledgeBaseQaRefEmbedding recordReference = new KnowledgeBaseQaRefEmbedding();
@@ -130,10 +132,13 @@ public class KnowledgeBaseQaService extends ServiceImpl<KnowledgeBaseQaRecordMap
      * @param user      用户
      * @param qaRecordId 记录 ID
      * @param graphDto  图谱引用
+     * @return 无
      */
     public void createGraphRefs(User user, Long qaRecordId, RefGraphDto graphDto) {
         log.info("更新图谱引用,userId:{},qaRecordId:{},vertices.Size:{},edges.size:{}", user.getId(), qaRecordId, graphDto.getVertices().size(), graphDto.getEdges().size());
+        // 将问题中抽取的实体拼接存储，便于检索时快速展示
         String entities = null == graphDto.getEntitiesFromQuestion() ? "" : String.join(",", graphDto.getEntitiesFromQuestion());
+        // 以原始结构保留图谱信息，避免结构化字段丢失细节
         Map<String, Object> graphFromStore = new HashMap<>();
         graphFromStore.put("vertices", graphDto.getVertices());
         graphFromStore.put("edges", graphDto.getEdges());
@@ -150,12 +155,15 @@ public class KnowledgeBaseQaService extends ServiceImpl<KnowledgeBaseQaRecordMap
      *
      * @param uuid 记录 UUID
      * @return 记录实体
+     * @throws BaseException 记录不存在时抛出异常
      */
     public KnowledgeBaseQa getOrThrow(String uuid) {
+        // 仅查询未删除记录，避免逻辑删除数据被再次使用
         KnowledgeBaseQa exist = ChainWrappers.lambdaQueryChain(baseMapper)
                 .eq(KnowledgeBaseQa::getUuid, uuid)
                 .eq(KnowledgeBaseQa::getIsDeleted, false)
                 .one();
+        // 未找到记录直接抛出，保持调用方处理一致
         if (null == exist) {
             throw new BaseException(A_DATA_NOT_FOUND);
         }

@@ -119,6 +119,7 @@ public class ApacheAgeGraphStore implements GraphStore {
         ensureNotEmpty(vertexes, vertexes.toString());
         try (Connection connection = setupConnection()) {
             for (GraphVertex vertex : vertexes) {
+                // 限制名称长度，避免图谱存储超长字段导致异常
                 vertex.setName(AdiStringUtil.tail(vertex.getName(), 20));
                 String label = vertex.getLabel();
                 String prepareSql = """
@@ -259,6 +260,7 @@ public class ApacheAgeGraphStore implements GraphStore {
     public List<GraphVertex> searchVertices(GraphVertexSearch search) {
         try (Connection connection = setupConnection()) {
             String label = search.getLabel();
+            // 使用元数据过滤条件构建 where 子句，确保检索范围可控
             String whereClause = GraphStoreUtil.buildWhereClause(search, "v");
             String query = """
                     select * from cypher('%s', $$
@@ -322,6 +324,7 @@ public class ApacheAgeGraphStore implements GraphStore {
     @Override
     public List<Triple<GraphVertex, GraphEdge, GraphVertex>> searchEdges(GraphEdgeSearch search) {
         try (Connection connection = setupConnection()) {
+            // 分别构建源/目标/边的过滤条件，再合并成总过滤子句
             String filterClause1 = GraphStoreUtil.buildWhereClause(search.getSource(), "v1");
             String filterClause2 = GraphStoreUtil.buildWhereClause(search.getTarget(), "v2");
             String filterClause3 = GraphStoreUtil.buildWhereClause(search.getEdge(), "e");
@@ -469,6 +472,7 @@ public class ApacheAgeGraphStore implements GraphStore {
      *
      * @param filter 过滤条件
      * @param includeEdges 是否包含边
+     * @return 无
      */
     @Override
     public void deleteVertices(GraphSearchCondition filter, boolean includeEdges) {
@@ -500,6 +504,7 @@ public class ApacheAgeGraphStore implements GraphStore {
      * 单独删除边。
      *
      * @param filter 过滤条件
+     * @return 无
      */
     @Override
     public void deleteEdges(GraphSearchCondition filter) {

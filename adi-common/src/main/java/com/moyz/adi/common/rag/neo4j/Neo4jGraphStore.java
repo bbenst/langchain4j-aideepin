@@ -127,6 +127,7 @@ public class Neo4jGraphStore implements GraphStore {
         try (Session session = driver.session()) {
             session.executeWrite(tx -> {
                 for (GraphVertex vertex : vertexes) {
+                    // 先拆解元数据为字段，避免后续过滤只能依赖单字段
                     Map<String, Object> metadata = vertex.getMetadata();
                     String label = StringUtils.isNotBlank(vertex.getLabel()) ? ":" + vertex.getLabel() : "";
                     Pair<String, Map<String, Object>> causeToArgs = buildCauseByMetadata(metadata, true);
@@ -269,6 +270,7 @@ public class Neo4jGraphStore implements GraphStore {
                 node = node(this.graphName).named("v");
             }
             AdiNeo4jFilterMapper neo4jFilterMapper = new AdiNeo4jFilterMapper(node);
+            // 使用 DSL 组装条件，避免拼接字符串带来的注入风险
             Condition condition = node.property("name")
                     .in(Cypher.literalOf(search.getNames()))
                     .and(neo4jFilterMapper.getCondition(search.getMetadataFilter()));
@@ -332,6 +334,7 @@ public class Neo4jGraphStore implements GraphStore {
             Condition condition = null;
             if (null != sourceFilter) {
                 AdiNeo4jFilterMapper sourceFilerMapper = new AdiNeo4jFilterMapper(sourceNode);
+                // 先构建源节点过滤条件
                 condition = sourceFilerMapper.getCondition(sourceFilter.getMetadataFilter());
                 if (CollectionUtils.isNotEmpty(sourceFilter.getNames())) {
                     condition = sourceNode.property("name")
@@ -341,6 +344,7 @@ public class Neo4jGraphStore implements GraphStore {
             }
             if (null != targetFilter) {
                 AdiNeo4jFilterMapper targetFilerMapper = new AdiNeo4jFilterMapper(targetNode);
+                // 叠加目标节点过滤条件
                 Condition targetCondition = targetFilerMapper.getCondition(targetFilter.getMetadataFilter());
                 if (CollectionUtils.isNotEmpty(targetFilter.getNames())) {
                     targetCondition = targetNode.property("name")
@@ -355,6 +359,7 @@ public class Neo4jGraphStore implements GraphStore {
             }
             if (null != search.getEdge()) {
                 AdiNeo4jFilterMapper edgeFilerMapper = new AdiNeo4jFilterMapper(edgeNode);
+                // 叠加边的过滤条件
                 Condition edgeCondition = edgeFilerMapper.getCondition(search.getEdge().getMetadataFilter());
                 if (CollectionUtils.isNotEmpty(search.getEdge().getNames())) {
                     edgeCondition = edge.property("name")
@@ -507,6 +512,7 @@ public class Neo4jGraphStore implements GraphStore {
      *
      * @param filter 过滤条件
      * @param includeEdges 是否包含边
+     * @return 无
      */
     public void deleteVertices(GraphSearchCondition filter, boolean includeEdges) {
         ensureNotNull(filter, "Data filter");
@@ -523,6 +529,7 @@ public class Neo4jGraphStore implements GraphStore {
                     .and(sourceFilerMapper.getCondition(filter.getMetadataFilter()));
             Statement statement;
             if (includeEdges) {
+                // 按条件删除节点，是否级联删除由上层决定
                 statement = match(sourceNode)
                         .where(sourceCondition)
                         .delete(sourceNode)
@@ -543,6 +550,7 @@ public class Neo4jGraphStore implements GraphStore {
      * 单独删除边。
      *
      * @param filter 过滤条件
+     * @return 无
      */
     public void deleteEdges(GraphSearchCondition filter) {
         ensureNotNull(filter, "Data filter");
@@ -765,6 +773,7 @@ public class Neo4jGraphStore implements GraphStore {
      * @param whereClause 条件片段
      * @param whereArgs 参数映射
      * @param alias 别名
+     * @return 无
      */
     private void buildNamesClause(List<String> names, StringBuilder whereClause, Map<String, Object> whereArgs, String alias) {
         if (names.isEmpty()) {
@@ -784,6 +793,7 @@ public class Neo4jGraphStore implements GraphStore {
      *
      * @param filterClause 过滤条件
      * @param sqlAndArgs SQL 片段与参数
+     * @return 无
      */
     private void appendSql(StringBuilder filterClause, Pair<String, Map<String, Object>> sqlAndArgs) {
         if (null == sqlAndArgs) {

@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * RetrieverWrapper对象
+ * 检索器包装对象，用于标记来源与保留响应内容。
  */
 @Builder
 @NoArgsConstructor
@@ -18,16 +18,18 @@ import java.util.List;
 @Data
 public class RetrieverWrapper {
     /**
-     * retriever
+     * 具体检索器实现。
      */
     private ContentRetriever retriever;
-    //Retrieve content from: knowledge_base conversation_memory web
     /**
-     * 内容From
+     * 检索来源：knowledge_base、conversation_memory、web 等。
+     */
+    /**
+     * 内容来源标识。
      */
     private String contentFrom;
     /**
-     * 响应
+     * 检索响应内容。
      */
     private List<Content> response;
 }

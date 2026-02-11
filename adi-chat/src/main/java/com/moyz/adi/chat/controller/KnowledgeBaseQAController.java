@@ -72,6 +72,7 @@ public class KnowledgeBaseQAController {
     @Operation(summary = "流式响应")
     @PostMapping(value = "/process/{qaRecordUuid}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter sseAsk(@PathVariable String qaRecordUuid) {
+        // 由服务层统一处理限额校验与异步推送，控制器只负责路由入口
         return knowledgeBaseService.sseAsk(qaRecordUuid);
     }
 

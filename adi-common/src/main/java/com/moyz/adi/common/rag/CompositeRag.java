@@ -65,15 +65,18 @@ public class CompositeRag {
      */
     public List<RetrieverWrapper> createRetriever(RetrieverCreateParam param) {
         List<RetrieverWrapper> retrievers = new ArrayList<>();
+        // 未配置任何 RAG 时直接返回空列表，避免后续空指针
         if (null == embeddingRag && null == graphRag) {
             log.warn("No RAG configured");
             return retrievers;
         }
         if (null != embeddingRag) {
+            // 向量检索器保留来源标识，便于后续引用溯源
             ContentRetriever embeddingRetriever = embeddingRag.createRetriever(param);
             retrievers.add(RetrieverWrapper.builder().contentFrom(embeddingRag.getName()).retriever(embeddingRetriever).response(new ArrayList<>()).build());
         }
         if (null != graphRag) {
+            // 图谱检索器保留来源标识，便于后续引用溯源
             ContentRetriever graphRetriever = graphRag.createRetriever(param);
             retrievers.add(RetrieverWrapper.builder().contentFrom(graphRag.getName()).retriever(graphRetriever).response(new ArrayList<>()).build());
         }
@@ -86,10 +89,12 @@ public class CompositeRag {
      * @param retrievers ContentRetriever 列表
      * @param sseAskParams 请求参数
      * @param consumer 回调
+     * @return 无
      */
     public void ragChat(List<ContentRetriever> retrievers, SseAskParams sseAskParams, TriConsumer<String, PromptMeta, AnswerMeta> consumer) {
         SSEEmitterHelper sseEmitterHelper = SpringUtil.getBean(SSEEmitterHelper.class);
         User user = sseAskParams.getUser();
+        // 统一注册 SSE 监听，确保异常和关闭都能被统一处理
         String askingKey = sseEmitterHelper.registerEventStreamListener(sseAskParams);
         try {
             query(retrievers, sseAskParams, (response, promptMeta, answerMeta) -> {
@@ -121,9 +126,11 @@ public class CompositeRag {
      * @param retrievers 文档召回器（向量、图谱）
      * @param params 前端传入的请求参数
      * @param consumer LLM 响应内容的消费者
+     * @return 无
      */
     private void query(List<ContentRetriever> retrievers, SseAskParams params, TriConsumer<String, PromptMeta, AnswerMeta> consumer) {
         AbstractLLMService llmService = LLMContext.getServiceOrDefault(params.getModelPlatform(), params.getModelName());
+        // 模型被禁用时直接拒绝请求，避免浪费资源
         if (!llmService.isEnabled()) {
             log.error("llm service is disabled");
             throw new BaseException(B_LLM_SERVICE_DISABLED);
@@ -133,6 +140,7 @@ public class CompositeRag {
         TokenStream tokenStream;
         ChatModelRequestParams chatModelRequestParams = params.getHttpRequestParams();
         if (StringUtils.isNotBlank(chatModelRequestParams.getMemoryId())) {
+            // 需要记忆的场景使用 ChatMemoryProvider，保证上下文连续
             ChatMemoryProvider chatMemoryProvider = memoryId -> MessageWindowChatMemory.builder()
                     .id(memoryId)
                     .maxMessages(2)
@@ -154,6 +162,7 @@ public class CompositeRag {
                 tokenStream = assistant.chat(chatModelRequestParams.getMemoryId(), chatModelRequestParams.getUserMessage(), new ArrayList<>());
             }
         } else {
+            // 无记忆场景使用临时助手，减少状态开销
             ITempStreamingChatAssistant assistant = AiServices.builder(ITempStreamingChatAssistant.class)
                     .streamingChatModel(llmService.buildStreamingChatModel(params.getModelProperties()))
                     .retrievalAugmentor(DefaultRetrievalAugmentor.builder().queryRouter(queryRouter).build())
@@ -164,6 +173,7 @@ public class CompositeRag {
                 tokenStream = assistant.chatSimple(chatModelRequestParams.getUserMessage(), new ArrayList<>());
             }
         }
+        // 统一注册流式回调：分片、完成、错误
         tokenStream
                 .onPartialResponse(content -> SSEEmitterHelper.parseAndSendPartialMsg(params.getSseEmitter(), content))
                 .onCompleteResponse(response -> {

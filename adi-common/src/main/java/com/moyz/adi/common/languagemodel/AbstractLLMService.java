@@ -56,17 +56,34 @@ import static com.moyz.adi.common.cosntant.AdiConstant.RESPONSE_FORMAT_TYPE_JSON
 import static com.moyz.adi.common.enums.ErrorEnum.A_PARAMS_ERROR;
 import static com.moyz.adi.common.enums.ErrorEnum.B_LLM_SERVICE_DISABLED;
 
+/**
+ * 抽象大模型服务基类，封装流式/非流式对话与工具调用流程。
+ */
 @Slf4j
 public abstract class AbstractLLMService extends CommonModelService {
 
+    /**
+     * Redis 模板，用于 token 统计与临时缓存。
+     */
     protected StringRedisTemplate stringRedisTemplate;
 
-    //User#uuid => ttsJobInfo
+    /**
+     * 用户 UUID 与 TTS 任务信息的缓存映射。
+     */
     private final Cache<String, TtsJobInfo> ttsJobCache;
 
+    /**
+     * 语音合成设置。
+     */
     @Getter
     private final TtsSetting ttsSetting;
 
+    /**
+     * 构建大模型服务基类。
+     *
+     * @param aiModel        模型配置
+     * @param modelPlatform  模型平台
+     */
     protected AbstractLLMService(AiModel aiModel, ModelPlatform modelPlatform) {
         super(aiModel, modelPlatform);
 
@@ -80,12 +97,22 @@ public abstract class AbstractLLMService extends CommonModelService {
         ttsJobCache = CacheBuilder.newBuilder().expireAfterWrite(10, TimeUnit.MINUTES).build();
     }
 
+    /**
+     * 初始化模型最大输入 token 数。
+     *
+     * @return 无
+     */
     private void initMaxInputTokens() {
         if (this.aiModel.getMaxInputTokens() < 1) {
             this.aiModel.setMaxInputTokens(LLM_MAX_INPUT_TOKENS_DEFAULT);
         }
     }
 
+    /**
+     * 获取 Redis 模板，懒加载。
+     *
+     * @return Redis 模板
+     */
     public StringRedisTemplate getStringRedisTemplate() {
         if (null == this.stringRedisTemplate) {
             this.stringRedisTemplate = SpringUtil.getBean(StringRedisTemplate.class);
@@ -93,42 +120,85 @@ public abstract class AbstractLLMService extends CommonModelService {
         return this.stringRedisTemplate;
     }
 
+    /**
+     * 设置代理地址。
+     *
+     * @param proxyAddress 代理地址
+     * @return 当前服务实例
+     */
     public AbstractLLMService setProxyAddress(InetSocketAddress proxyAddress) {
         this.proxyAddress = proxyAddress;
         return this;
     }
 
     /**
-     * 检测该service是否可用（不可用的情况通常是没有配置key）
+     * 检测该服务是否可用（不可用的情况通常是没有配置 key）。
      *
-     * @return
+     * @return 是否可用
      */
     public abstract boolean isEnabled();
 
+    /**
+     * 聊天前置校验，子类可覆写。
+     *
+     * @param params 请求参数
+     * @return true 表示通过校验
+     */
     protected boolean checkBeforeChat(SseAskParams params) {
         return true;
     }
 
+    /**
+     * 构建非流式 ChatModel。
+     *
+     * @param properties 构建参数
+     * @return ChatModel 实例
+     */
     public ChatModel buildChatLLM(ChatModelBuilderProperties properties) {
         ChatModelBuilderProperties tmpProperties = properties;
         if (null == properties) {
+            // 未传参数时使用默认温度，保证输出稳定性
             tmpProperties = new ChatModelBuilderProperties();
             tmpProperties.setTemperature(0.7);
             log.info("llmBuilderProperties is null, set default temperature:{}", tmpProperties.getTemperature());
         }
         if (null == tmpProperties.getTemperature() || tmpProperties.getTemperature() <= 0 || tmpProperties.getTemperature() > 1) {
+            // 超出合法区间时回退默认值，避免模型拒绝请求
             tmpProperties.setTemperature(0.7);
             log.info("llmBuilderProperties temperature is invalid, set default temperature:{}", tmpProperties.getTemperature());
         }
         return doBuildChatModel(tmpProperties);
     }
 
+    /**
+     * 构建具体 ChatModel，由子类实现。
+     *
+     * @param properties 构建参数
+     * @return ChatModel 实例
+     */
     protected abstract ChatModel doBuildChatModel(ChatModelBuilderProperties properties);
 
+    /**
+     * 构建流式 ChatModel，由子类实现。
+     *
+     * @param properties 构建参数
+     * @return StreamingChatModel 实例
+     */
     public abstract StreamingChatModel buildStreamingChatModel(ChatModelBuilderProperties properties);
 
+    /**
+     * 解析底层异常并转换为业务异常。
+     *
+     * @param error 原始异常
+     * @return 解析后的异常
+     */
     protected abstract LLMException parseError(Object error);
 
+    /**
+     * 获取当前模型的 token 估算器。
+     *
+     * @return token 估算器
+     */
     public abstract TokenCountEstimator getTokenEstimator();
 
     /**
@@ -136,6 +206,8 @@ public abstract class AbstractLLMService extends CommonModelService {
      *
      * @param params   请求参数
      * @param consumer 响应结果回调
+     * @return 无
+     * @throws BaseException 服务不可用或参数校验失败时抛出异常
      */
     public void streamingChat(SseAskParams params, TriConsumer<LLMResponseContent, PromptMeta, AnswerMeta> consumer) {
         if (!isEnabled()) {
@@ -165,7 +237,7 @@ public abstract class AbstractLLMService extends CommonModelService {
                 .build();
         try {
 
-            //如果系统设置的语音合成器类型是后端合成，并且当前聊天设置的返回内容是音频，则初始化tts任务并注册回调函数
+            // 如果系统设置后端语音合成且返回内容为音频，则初始化 TTS 任务并注册回调
             if (TtsUtil.needTts(ttsSetting, params.getAnswerContentType())) {
                 String ttsJobId = UuidUtil.createShort();
                 TtsJobInfo jobInfo = new TtsJobInfo();
@@ -182,7 +254,7 @@ public abstract class AbstractLLMService extends CommonModelService {
                 }, jobInfo::setFilePath, (String errorMsg) -> log.error("tts error: {}", errorMsg));
             }
 
-            //不管是不是需要返回音频文件，都需要innerStreamingChat()
+            // 无论是否返回音频，都需要走流式聊天主流程
             innerStreamingChat(innerStreamChatParams);
         } catch (Exception e) {
             ttsJobCache.invalidate(params.getUser().getUuid());
@@ -196,6 +268,7 @@ public abstract class AbstractLLMService extends CommonModelService {
      * 内部流式聊天方法，处理工具调用等复杂逻辑
      *
      * @param params 参数对象，包含流式聊天所需的所有信息
+     * @return 无
      */
     private void innerStreamingChat(InnerStreamChatParams params) {
         // 预构建工具映射，避免每个分片重复解析工具定义
@@ -220,7 +293,7 @@ public abstract class AbstractLLMService extends CommonModelService {
                     // 如果有工具执行请求
                     List<ToolExecutionResultMessage> toolExecutionMessages = createToolExecutionMessages(responseAiMessage, toolSpecificationMcpClientMap);
 
-                    //mcp调用消息格式参考：https://docs.langchain4j.dev/tutorials/tools/
+                    // MCP 调用消息格式参考：https://docs.langchain4j.dev/tutorials/tools/
                     AiMessage aiMessage = AiMessage.aiMessage(responseAiMessage.toolExecutionRequests());
                     List<ChatMessage> messages = new ArrayList<>(params.getChatRequest().messages());
                     messages.add(aiMessage);
@@ -230,12 +303,12 @@ public abstract class AbstractLLMService extends CommonModelService {
                             .parameters(params.getChatRequest().parameters())
                             .build());
                     // 工具调用结果回灌后递归继续对话，直到模型返回最终自然语言答案
-                    // recursive call now with tool calling results
+                    // 使用工具调用结果递归继续对话
                     innerStreamingChat(params);
                 } else {
                     TtsJobInfo jobInfo = ttsOnComplete(params);
                     String filePath = null != jobInfo ? jobInfo.getFilePath() : null;
-                    //结束整个对话任务
+                    // 结束整个对话任务
                     Pair<PromptMeta, AnswerMeta> pair = SSEEmitterHelper.calculateToken(response, params.getUuid());
                     // 仅在最终完成时触发 consumer，确保上层拿到的是可持久化的完整结果
                     params.getConsumer().accept(new LLMResponseContent(response.aiMessage().thinking(), response.aiMessage().text(), filePath), pair.getLeft(), pair.getRight());
@@ -253,6 +326,13 @@ public abstract class AbstractLLMService extends CommonModelService {
         });
     }
 
+    /**
+     * 非流式聊天接口。
+     *
+     * @param params 请求参数
+     * @return 聊天响应
+     * @throws BaseException 服务不可用或参数校验失败时抛出异常
+     */
     public ChatResponse chat(SseAskParams params) {
         if (!isEnabled()) {
             log.error("llm service is disabled");
@@ -301,7 +381,7 @@ public abstract class AbstractLLMService extends CommonModelService {
 
                 cacheTokenUsage(uuid, chatResponse);
 
-                // recursive call now with tool calling results
+                // 使用工具调用结果递归继续对话
                 return innerChat(uuid, chatModel, chatModelRequestParams, ChatRequest.builder()
                         .messages(messages)
                         .parameters(chatRequest.parameters())
@@ -315,10 +395,11 @@ public abstract class AbstractLLMService extends CommonModelService {
     }
 
     /**
-     * 缓存token使用情况
+     * 缓存 token 使用情况。
      *
      * @param uuid         唯一标识
      * @param chatResponse 聊天响应
+     * @return 无
      */
     private void cacheTokenUsage(String uuid, ChatResponse chatResponse) {
         int inputTokenCount = chatResponse.metadata().tokenUsage().inputTokenCount();
@@ -327,7 +408,12 @@ public abstract class AbstractLLMService extends CommonModelService {
         LLMTokenUtil.cacheTokenUsage(getStringRedisTemplate(), uuid, chatResponse.metadata().tokenUsage());
     }
 
-
+    /**
+     * 构建聊天消息列表（包含系统消息、用户消息与图片内容）。
+     *
+     * @param chatModelRequestParams 聊天请求参数
+     * @return 消息列表
+     */
     private List<ChatMessage> createChatMessages(ChatModelRequestParams chatModelRequestParams) {
         String memoryId = chatModelRequestParams.getMemoryId();
         List<Content> userContents = new ArrayList<>();
@@ -338,12 +424,14 @@ public abstract class AbstractLLMService extends CommonModelService {
             TokenCountEstimator tokenCountEstimator;
             String tokenEstimatorName = TokenEstimatorThreadLocal.getTokenEstimator();
             if (StringUtils.isBlank(tokenEstimatorName) && null != getTokenEstimator()) {
+                // 优先使用模型自带估算器，保证与服务一致
                 tokenCountEstimator = getTokenEstimator();
             } else {
+                // 使用线程上下文指定的估算器，确保与知识库一致
                 tokenCountEstimator = TokenEstimatorFactory.create(tokenEstimatorName);
             }
 
-            //滑动窗口算法限制消息长度
+            // 滑动窗口算法限制消息长度
             TokenWindowChatMemory memory = TokenWindowChatMemory.builder()
                     .chatMemoryStore(MapDBChatMemoryStore.getSingleton())
                     .id(memoryId)
@@ -353,7 +441,7 @@ public abstract class AbstractLLMService extends CommonModelService {
                 memory.add(SystemMessage.from(chatModelRequestParams.getSystemMessage()));
             }
 
-            //处理重复的UserMessage
+            // 处理重复的 UserMessage，避免用户消息被重复计入
             if (!memory.messages().isEmpty()) {
                 ChatMessage lastMessage = memory.messages().get(memory.messages().size() - 1);
                 if (lastMessage instanceof UserMessage) {
@@ -365,11 +453,11 @@ public abstract class AbstractLLMService extends CommonModelService {
 
             memory.add(UserMessage.from(userContents));
 
-            //得到截断后符合maxTokens的文本消息
+            // 得到截断后符合 maxTokens 的文本消息
             chatMessages.addAll(memory.messages());
 
-            //AI services currently do not support multimodality, use the low-level API for this. https://docs.langchain4j.dev/tutorials/ai-services#multimodality
-            //重新组装用户消息及追加图片消息到chatMessage
+            // AI Services 暂不支持多模态，使用低层 API 处理：https://docs.langchain4j.dev/tutorials/ai-services#multimodality
+            // 重新组装用户消息并追加图片内容
             List<Content> imageContents = ImageUtil.urlsToImageContent(chatModelRequestParams.getImageUrls());
             if (CollectionUtils.isNotEmpty(imageContents)) {
                 int lastIndex = chatMessages.size() - 1;
@@ -394,15 +482,21 @@ public abstract class AbstractLLMService extends CommonModelService {
         return chatMessages;
     }
 
+    /**
+     * 解析当前请求可用的工具列表。
+     *
+     * @param mcpClients MCP 客户端列表
+     * @return 工具定义与客户端的映射
+     */
     private Map<ToolSpecification, McpClient> getRequestTools(List<McpClient> mcpClients) {
         Map<ToolSpecification, McpClient> tools = new HashMap<>();
-        // MCP Tools
+        // MCP 工具
         for (McpClient mcpClient : mcpClients) {
             for (ToolSpecification toolSpecification : mcpClient.listTools()) {
                 tools.put(toolSpecification, mcpClient);
             }
         }
-        // native tools
+        // 原生工具（暂未启用）
 //        chatRequest.tools().forEach(tool -> {
 //            ToolSpecifications.toolSpecificationsFrom(tool)
 //                    .forEach(spec -> tools.put(spec,
@@ -411,12 +505,18 @@ public abstract class AbstractLLMService extends CommonModelService {
         return tools;
     }
 
+    /**
+     * 构建 ChatRequest 请求。
+     *
+     * @param httpRequestParams 请求参数
+     * @return ChatRequest
+     */
     private ChatRequest createChatRequest(ChatModelRequestParams httpRequestParams) {
 
         log.info("sseChat,messageId:{}", httpRequestParams.getMemoryId());
         List<ChatMessage> chatMessages = createChatMessages(httpRequestParams);
 
-        // Mcp
+        // MCP 工具规格
         List<ToolSpecification> toolSpecifications = new ArrayList<>();
         List<McpClient> mcpClients = httpRequestParams.getMcpClients();
         if (!CollectionUtils.isEmpty(mcpClients)) {
@@ -434,7 +534,7 @@ public abstract class AbstractLLMService extends CommonModelService {
         DefaultChatRequestParameters.Builder<?> builder = ChatRequestParameters.builder();
         builder.toolSpecifications(toolSpecifications);
 
-        // Response format
+        // 响应格式
         String responseFormat = httpRequestParams.getResponseFormat();
         log.info("Response format:{}", responseFormat);
         if (StringUtils.isNotBlank(responseFormat)) {
@@ -445,7 +545,7 @@ public abstract class AbstractLLMService extends CommonModelService {
             }
         }
 
-        // Enable thinking
+        // 启用思考与联网检索等自定义参数
         Map<String, Object> customParameters = new HashMap<>();
         if (null != httpRequestParams.getReturnThinking()) {
             customParameters.put(ENABLE_THINKING, httpRequestParams.getReturnThinking());
@@ -461,10 +561,24 @@ public abstract class AbstractLLMService extends CommonModelService {
                 .build();
     }
 
+    /**
+     * 由子类扩展请求参数。
+     *
+     * @param defaultParameters 默认参数
+     * @param customParameters  自定义参数
+     * @return 处理后的请求参数
+     */
     protected ChatRequestParameters doCreateChatRequestParameters(ChatRequestParameters defaultParameters, Map<String, Object> customParameters) {
         return defaultParameters;
     }
 
+    /**
+     * 将工具执行请求转换为结果消息。
+     *
+     * @param aiMessage                     AI 返回消息
+     * @param toolSpecificationMcpClientMap 工具与客户端映射
+     * @return 工具执行结果消息列表
+     */
     private List<ToolExecutionResultMessage> createToolExecutionMessages(AiMessage aiMessage, Map<ToolSpecification, McpClient> toolSpecificationMcpClientMap) {
         List<ToolExecutionResultMessage> toolExecutionMessages = new ArrayList<>();
         aiMessage.toolExecutionRequests().forEach(req -> {
@@ -499,6 +613,7 @@ public abstract class AbstractLLMService extends CommonModelService {
      *
      * @param params          内部迭代方法入参
      * @param partialResponse 文本内容
+     * @return 无
      */
     private void ttsOnPartialMessage(InnerStreamChatParams params, String partialResponse) {
         TtsJobInfo jobInfo = ttsJobCache.getIfPresent(params.getUser().getUuid());
@@ -509,17 +624,29 @@ public abstract class AbstractLLMService extends CommonModelService {
         }
     }
 
+    /**
+     * 结束 TTS 任务并返回任务信息。
+     *
+     * @param params 内部迭代方法入参
+     * @return TTS 任务信息
+     */
     private TtsJobInfo ttsOnComplete(InnerStreamChatParams params) {
         TtsJobInfo jobInfo = ttsJobCache.getIfPresent(params.getUser().getUuid());
         if (null != jobInfo && null != jobInfo.getTtsModelContext()) {
-            //TODO。。。 停止转换任务，此时有可能导致只合成部分音频，待处理
+            // TODO：停止转换任务可能导致仅合成部分音频，需后续完善
             jobInfo.getTtsModelContext().complete(jobInfo.getJobId());
         }
-        //Remove job info
+        // 移除任务信息，避免缓存残留
         ttsJobCache.invalidate(params.getUser().getUuid());
         return jobInfo;
     }
 
+    /**
+     * 关闭 MCP 客户端连接。
+     *
+     * @param mcpClients MCP 客户端列表
+     * @return 无
+     */
     private void closeMcpClients(List<McpClient> mcpClients) {
         mcpClients.forEach(item -> {
             try {
@@ -535,6 +662,7 @@ public abstract class AbstractLLMService extends CommonModelService {
      * 部分模型（如硅基流动）返回的工具请求可能没有id和name，需要手动解析，如 ToolExecutionRequest { id = "", name = "", arguments = "maps_weather {"city": "广州"}" }
      *
      * @param req 工具请求参数
+     * @return 解析后的工具请求
      */
     private ToolExecutionRequest parseToolRequest(ToolExecutionRequest req) {
         if (StringUtils.isBlank(req.id())) {

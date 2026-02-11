@@ -118,17 +118,20 @@ public class GraphStoreContentRetriever implements ContentRetriever {
      *
      * @param query 查询参数
      * @return 内容列表
+     * @throws BaseException 未命中且配置中断时抛出异常
      */
     @Override
     public List<Content> retrieve(Query query) {
         log.info("Graph retrieve,query:{}", query);
         String response = "";
         try {
+            // 先调用模型从问题中抽取实体与关系
             response = chatModel.chat(GraphExtractPrompt.GRAPH_EXTRACTION_PROMPT.replace("{input_text}", query.text()));
         } catch (Exception e) {
             log.error("Graph retrieve. extract graph error", e);
         }
         if (StringUtils.isBlank(response)) {
+            // 抽取为空时直接返回，避免无意义查询
             return Collections.emptyList();
         }
         Set<String> entities = new HashSet<>();
@@ -157,6 +160,7 @@ public class GraphStoreContentRetriever implements ContentRetriever {
         }
 
         List<String> entityNames = entities.stream().toList();
+        // 先检索与实体相关的顶点
         List<GraphVertex> vertices = graphStore.searchVertices(
                 GraphVertexSearch.builder()
                         .names(entityNames)
@@ -164,6 +168,7 @@ public class GraphStoreContentRetriever implements ContentRetriever {
                         .limit(maxResultsProvider.apply(query))
                         .build()
         );
+        // 再补充边关系，形成更完整的图谱上下文
         List<Triple<GraphVertex, GraphEdge, GraphVertex>> edgeWithVerticeList = graphStore.searchEdges(
                 GraphEdgeSearch.builder()
                         .edge(GraphSearchCondition.builder().metadataFilter(filterProvider.apply(query)).build())
@@ -179,10 +184,12 @@ public class GraphStoreContentRetriever implements ContentRetriever {
             allEdges.add(triple.getMiddle());
         }
         allVertices.putAll(vertices.stream().collect(toMap(GraphVertex::getId, Function.identity())));
+        // 缓存图谱引用信息，便于结果回传
         kbQaRecordRefGraphDto.setEntitiesFromQuestion(entityNames);
         kbQaRecordRefGraphDto.setVertices(allVertices.values().stream().toList());
         kbQaRecordRefGraphDto.setEdges(allEdges);
 
+        // 将顶点与边描述统一转为内容列表供 RAG 使用
         List<Content> vertexContents = vertices.stream().map(GraphVertex::getDescription).map(Content::from).collect(toList());
         List<Content> edgeContents = edgeWithVerticeList.stream().map(Triple::getMiddle).map(GraphEdge::getDescription).map(Content::from).toList();
         vertexContents.addAll(edgeContents);
@@ -241,6 +248,11 @@ public class GraphStoreContentRetriever implements ContentRetriever {
         }
     }
 
+    /**
+     * 返回检索器字符串描述。
+     *
+     * @return 描述字符串
+     */
     @Override
     public String toString() {
         return "GraphStoreContentRetriever{" +

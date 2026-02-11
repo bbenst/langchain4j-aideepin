@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 图谱Vertex更新信息对象
+ * 图谱顶点更新信息对象。
  */
 @NoArgsConstructor
 @AllArgsConstructor
@@ -15,17 +15,19 @@ import lombok.NoArgsConstructor;
 @Data
 public class GraphVertexUpdateInfo {
     /**
-     * newData
+     * 新的顶点数据。
      */
     private GraphVertex newData;
 
-    //Filter
     /**
-     * 名称
+     * 过滤条件。
+     */
+    /**
+     * 顶点名称。
      */
     private String name;
     /**
-     * metadataFilter
+     * 元数据过滤条件。
      */
     private Filter metadataFilter;
 }

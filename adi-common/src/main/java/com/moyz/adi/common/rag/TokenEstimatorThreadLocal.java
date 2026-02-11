@@ -15,8 +15,10 @@ public class TokenEstimatorThreadLocal {
      * 设置当前线程的估算器名称。
      *
      * @param value 估算器名称
+     * @return 无
      */
     public static void setTokenEstimator(String value) {
+        // 空值统一设为空字符串，避免下游 NPE
         tokenEstimator.set(StringUtils.isBlank(value) ? "" : value);
     }
 
@@ -31,8 +33,11 @@ public class TokenEstimatorThreadLocal {
 
     /**
      * 清理当前线程的估算器名称。
+     *
+     * @return 无
      */
     public static void clearTokenEstimator() {
+        // 使用 remove 释放线程变量，避免线程复用污染
         tokenEstimator.remove();
     }
 }

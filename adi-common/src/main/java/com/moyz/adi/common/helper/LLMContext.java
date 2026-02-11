@@ -118,6 +118,7 @@ public class LLMContext {
                 .findFirst()
                 .orElse(null);
         if (null == service && useDefault) {
+            // 找不到指定模型时，按策略回退到第一个可用的免费模型
             Optional<AbstractLLMService> serviceOptional = getFirstEnableAndFree();
             if (serviceOptional.isPresent()) {
                 log.warn("︿︿︿ 找不到 modelId:{},使用第1个可用的免费模型 {} ︿︿︿", modelId, serviceOptional.get().getAiModel().getName());

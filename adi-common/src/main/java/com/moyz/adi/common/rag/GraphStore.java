@@ -102,6 +102,7 @@ public interface GraphStore {
      *
      * @param filter 过滤条件
      * @param includeEdges 是否同时删除相关边
+     * @return 无
      */
     void deleteVertices(GraphSearchCondition filter, boolean includeEdges);
 
@@ -109,6 +110,7 @@ public interface GraphStore {
      * 删除符合条件的边。
      *
      * @param filter 过滤条件
+     * @return 无
      */
     void deleteEdges(GraphSearchCondition filter);
 }

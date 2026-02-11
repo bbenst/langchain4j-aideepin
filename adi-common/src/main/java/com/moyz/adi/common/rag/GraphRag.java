@@ -75,10 +75,12 @@ public class GraphRag {
      * 将文档切分、抽取实体关系并写入图谱。
      *
      * @param graphIngestParams 抽取与入库参数
+     * @return 无
      */
     public void ingest(GraphIngestParams graphIngestParams) {
         log.info("GraphRag ingest");
         User user = graphIngestParams.getUser();
+        // 使用统一分块与 token 估算策略，保证后续抽取不会超限
         DocumentSplitter documentSplitter = DocumentSplitters.recursive(RAG_MAX_SEGMENT_SIZE_IN_TOKENS, graphIngestParams.getOverlap(), TokenEstimatorFactory.create(graphIngestParams.getTokenEstimator()));
         GraphStoreIngestor ingestor = GraphStoreIngestor.builder()
                 .documentSplitter(documentSplitter)
@@ -88,6 +90,7 @@ public class GraphRag {
 
                         String segmentId = UuidUtil.createShort();
                         log.info("Save segment to graph_segment,segmentId:{}", segmentId);
+                        // 先持久化分段信息，便于抽取失败时仍可追溯
                         KnowledgeBaseGraphSegment graphSegment = new KnowledgeBaseGraphSegment();
                         graphSegment.setUuid(segmentId);
                         graphSegment.setRemark(segment.text());
@@ -106,12 +109,15 @@ public class GraphRag {
                                     continue;
                                 }
                             }
+                            // 调用模型抽取实体关系，并记录返回内容
                             log.info("请求LLM从文本中抽取实体及关系,segmentId:{}", segmentId);
                             ChatResponse aiMessageResponse = graphIngestParams.getChatModel().chat(UserMessage.from(GraphExtractPrompt.GRAPH_EXTRACTION_PROMPT.replace("{input_text}", segment.text())));
                             response = aiMessageResponse.aiMessage().text();
 
+                            // 记录 token 消耗，便于成本统计
                             SpringUtil.getBean(UserDayCostService.class).appendCostToUser(user, aiMessageResponse.tokenUsage().totalTokenCount(), graphIngestParams.isFreeToken());
                         }
+                        // 将分段与抽取结果打包返回给入库流程
                         segmentIdToExtractContent.add(Triple.of(segment, segmentId, response));
                     }
                     return segmentIdToExtractContent;

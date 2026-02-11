@@ -15,11 +15,12 @@ public class TtsUtil {
     }
 
     /**
-     * 如果系统设置的语音合成器类型是后端合成，并且当前聊天设置的返回内容是音频，则表示将文本转语音
+     * 判断是否需要将文本转语音。
+     * 条件：系统设置为服务端合成且当前返回内容为音频。
      *
-     * @param ttsSetting        tts设置
+     * @param ttsSetting        TTS 设置
      * @param answerContentType 内容类型
-     * @return 是否要进行文本转语音
+     * @return 是否需要进行文本转语音
      * @throws NullPointerException ttsSetting 为空时抛出异常
      */
     public static boolean needTts(TtsSetting ttsSetting, int answerContentType) {

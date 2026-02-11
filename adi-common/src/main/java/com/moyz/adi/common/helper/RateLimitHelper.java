@@ -38,10 +38,12 @@ public class RateLimitHelper {
      *
      * @param requestTimesKey Redis 键
      * @param rateLimitConfig 请求频率限制配置
+     * @return 无
      */
     public void increaseRequestTimes(String requestTimesKey, RequestRateLimit rateLimitConfig) {
         long expireTime = stringRedisTemplate.getExpire(requestTimesKey).longValue();
         if (expireTime == -1) {
+            // 未设置过期时间时，初始化计数与过期窗口
             stringRedisTemplate.opsForValue().increment(requestTimesKey);
             stringRedisTemplate.opsForValue().set(requestTimesKey, String.valueOf(1), rateLimitConfig.getMinutes(), TimeUnit.MINUTES);
         } else if (expireTime > 3) {

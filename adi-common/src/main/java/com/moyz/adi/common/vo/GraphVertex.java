@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 import java.util.Map;
 
 /**
- * 图谱Vertex对象
+ * 图谱顶点对象。
  */
 @Data
 @Builder
@@ -17,29 +17,31 @@ import java.util.Map;
 @NoArgsConstructor
 public class GraphVertex {
     /**
-     * 主键ID
+     * 主键 ID。
      */
     private String id;
-    //Apache AGE暂时不支持多标签
     /**
-     * label
+     * Apache AGE 暂不支持多标签。
+     */
+    /**
+     * 标签。
      */
     private String label;
     /**
-     * 名称
+     * 名称。
      */
     private String name;
     /**
-     * 如对应的文本段id
+     * 对应的文本段 ID。
      */
     @JsonProperty("text_segment_id")
     private String textSegmentId;
     /**
-     * 描述
+     * 描述。
      */
     private String description;
     /**
-     * metadata
+     * 元数据。
      */
     private Map<String, Object> metadata;
 }

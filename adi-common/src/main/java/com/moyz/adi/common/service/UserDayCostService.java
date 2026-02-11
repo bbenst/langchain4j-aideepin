@@ -34,12 +34,15 @@ public class UserDayCostService extends ServiceImpl<UserDayCostMapper, UserDayCo
      * @param user   用户
      * @param tokens token 数量
      * @param isFree 消耗的是否免费额度
+     * @return 无
      */
     public void appendCostToUser(User user, int tokens, boolean isFree) {
         log.info("用户{}增加消耗token数量:{}", user.getName(), tokens);
+        // 非正数直接返回，避免无效写入
         if (tokens <= 0) {
             return;
         }
+        // 先查询当天记录，存在则累加，不存在则新增
         UserDayCost userDayCost = getTodayCost(user, isFree);
         UserDayCost saveOrUpdateInst = new UserDayCost();
         if (null == userDayCost) {
